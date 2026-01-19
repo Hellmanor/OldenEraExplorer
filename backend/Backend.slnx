@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/Domain/Domain.csproj" />
+  <Project Path="src/Localization/Localization.csproj" />
+  <Project Path="src/GameData/GameData.csproj" />
+  <Project Path="src/AssetExtractor/AssetExtractor.csproj" />
+  <Project Path="src/AssetExtractor.CLI/AssetExtractor.CLI.csproj" />
+  <Project Path="src/API/API.csproj" />
+</Solution>

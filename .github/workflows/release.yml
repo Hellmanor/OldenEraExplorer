@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on version tags like v0.7.1, v1.0.0, etc.
+
+permissions:
+  contents: write # Required for creating releases and uploading assets
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for changelog generation
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Extract version from tag
+        id: version
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          # Remove 'v' prefix from tag to get version number
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Build release packages
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          chmod +x scripts/build-release.sh
+          ./scripts/build-release.sh
+
+      - name: List generated packages
+        run: |
+          echo "Generated packages:"
+          ls -lh dist/*.zip
+
+      - name: Generate release notes
+        id: release_notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          cat > release_notes.md << EOF
+          ## Olden Era Explorer v${VERSION}
+
+          Fan-made browser for Heroes of Might and Magic: Olden Era game data.
+          Browse units, heroes, spells, artifacts, buildings, and 3D models without opening the game.
+
+          ### Installation
+
+          1. Download the appropriate ZIP file for your platform
+          2. Extract to a directory of your choice
+          3. Run the executable:
+             - **Windows**: Double-click \`OldenEraExplorer.exe\`
+             - **Linux/macOS**: \`./OldenEraExplorer\` (may need \`chmod +x\` first)
+
+          ### Features
+
+          - **Browse game data**: Units, heroes, spells, skills, abilities, artifacts, buildings, map objects, faction laws, subclasses
+          - **3D model viewer**: View unit and map object models in interactive 3D
+          - **Real-time asset extraction**: Automatically extracts icons and models from game files
+          - **Multi-language support**: 14 game locales supported
+
+          ### System Requirements
+
+          - **Self-contained**: No .NET installation required (runtime embedded)
+          - **Windows**: Windows 10 or later (64-bit)
+          - **Linux**: Modern distribution with glibc 2.17+
+          - **macOS**: macOS 11.0+ (Big Sur) or later
+
+          ### Requirements
+
+          Heroes of Might and Magic: Olden Era must be installed on your system.
+          The application supports Steam version Demo (0.46.10-demo).
+
+          ### First Run
+
+          On first launch:
+          1. System tray icon appears, browser opens automatically to `http://localhost:5176`
+          2. Attempt to auto-detect your Olden Era installation
+          3. Extract game assets (icons, models)
+
+          You can also manually select your game path through the UI.
+          Heroes of Might and Magic: Olden Era** (Steam version)
+
+          ### Notes
+
+          - **Single executable**: Frontend is embedded in the backend binary
+          - **System tray**: Application runs in system tray with browser auto-launch
+          - **macOS users**: May need to bypass Gatekeeper security for unsigned apps:
+            \`\`\`bash
+            xattr -dr com.apple.quarantine OldenEraExplorer
+            \`\`\`
+
+          For more information, see the [README](https://github.com/${REPOSITORY}/blob/master/README.md).
+          EOF
+
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          files: |
+            dist/OldenEraExplorer-v${{ steps.version.outputs.version }}-win-x64.zip
+            dist/OldenEraExplorer-v${{ steps.version.outputs.version }}-linux-x64.zip
+            dist/OldenEraExplorer-v${{ steps.version.outputs.version }}-osx-x64.zip
+            dist/OldenEraExplorer-v${{ steps.version.outputs.version }}-osx-arm64.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

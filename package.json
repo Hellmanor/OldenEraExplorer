@@ -1,0 +1,22 @@
+{
+  "name": "olden-era-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A localhost web application for browsing Heroes of Might and Magic: Olden Era game data",
+  "license": "GPL-3.0-only",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "dotnet run --project backend/src/API",
+    "dev:frontend": "wait-on tcp:5176 && npm run dev --prefix frontend"
+  },
+  "overrides": {
+    "@types/three": "0.176.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "wait-on": "^9.0.3"
+  }
+}

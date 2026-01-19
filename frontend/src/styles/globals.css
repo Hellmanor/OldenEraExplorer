@@ -1,0 +1,265 @@
+@import "tailwindcss";
+
+@theme {
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
+  --radius-sm: calc(0.5rem - 4px);
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-surface: hsl(var(--surface));
+  --color-surface-hover: hsl(var(--surface-hover));
+
+  --color-semantic-gold: hsl(var(--semantic-gold));
+  --color-semantic-orange: hsl(var(--semantic-orange));
+  --color-semantic-green: hsl(var(--semantic-green));
+  --color-semantic-blue: hsl(var(--semantic-blue));
+  --color-semantic-red: hsl(var(--semantic-red));
+  --color-semantic-purple: hsl(var(--semantic-purple));
+
+  --color-school-day: hsl(var(--school-day));
+  --color-school-night: hsl(var(--school-night));
+  --color-school-primal: hsl(var(--school-primal));
+  --color-school-space: hsl(var(--school-space));
+  --color-school-neutral: hsl(var(--school-neutral));
+
+  --color-rarity-common: hsl(var(--rarity-common));
+  --color-rarity-uncommon: hsl(var(--rarity-uncommon));
+  --color-rarity-rare: hsl(var(--rarity-rare));
+  --color-rarity-epic: hsl(var(--rarity-epic));
+  --color-rarity-legendary: hsl(var(--rarity-legendary));
+  --color-rarity-mythic: hsl(var(--rarity-mythic));
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 14%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 25%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 0 0% 17%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 17%;
+    --ring: 217 91% 60%;
+    --radius: 0.5rem;
+    --surface: 0 0% 15%;
+    --surface-hover: 0 0% 18%;
+
+    /* WCAG AA+ contrast ratios for accessibility */
+    --semantic-gold: 45 58% 58%;          /* 8.60:1 AAA */
+    --semantic-orange: 33 100% 50%;       /* 7.46:1 AAA */
+    --semantic-green: 142 69% 58%;        /* 9.99:1 AAA */
+    --semantic-blue: 213 94% 68%;         /* 6.85:1 AA */
+    --semantic-red: 0 84% 60%;            /* 4.62:1 AA */
+    --semantic-purple: 258 89% 76%;       /* 6.40:1 AA */
+
+    --school-day: 38 55% 59%;             /* 7.56:1 AAA */
+    --school-night: 289 35% 59%;          /* 4.81:1 AA */
+    --school-primal: 10 66% 60%;          /* 5.49:1 AA */
+    --school-space: 191 40% 53%;          /* 6.09:1 AA */
+    --school-neutral: 241 30% 65%;        /* 5.38:1 AA */
+
+    --rarity-common: 142 69% 58%;         /* 9.99:1 AAA */
+    --rarity-uncommon: 120 100% 56%;      /* 12.73:1 AAA */
+    --rarity-rare: 213 94% 68%;           /* 6.85:1 AA */
+    --rarity-epic: 258 89% 76%;           /* 6.40:1 AA */
+    --rarity-legendary: 30 100% 50%;      /* 6.91:1 AA */
+    --rarity-mythic: 43 63% 70%;          /* 11.03:1 AAA */
+  }
+
+  .theme-dark {
+    --background: 0 0% 14%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 25%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 0 0% 17%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 17%;
+    --ring: 217 91% 60%;
+    --radius: 0.5rem;
+    --surface: 0 0% 15%;
+    --surface-hover: 0 0% 18%;
+
+    --semantic-gold: 45 58% 58%;
+    --semantic-orange: 33 100% 50%;
+    --semantic-green: 142 69% 58%;
+    --semantic-blue: 213 94% 68%;
+    --semantic-red: 0 84% 60%;
+    --semantic-purple: 258 89% 76%;
+
+    --school-day: 38 55% 59%;
+    --school-night: 289 35% 59%;
+    --school-primal: 10 66% 60%;
+    --school-space: 191 40% 53%;
+    --school-neutral: 241 30% 65%;
+
+    --rarity-common: 142 69% 58%;
+    --rarity-uncommon: 120 100% 56%;
+    --rarity-rare: 213 94% 68%;
+    --rarity-epic: 258 89% 76%;
+    --rarity-legendary: 30 100% 50%;
+    --rarity-mythic: 43 63% 70%;
+  }
+
+  .theme-light {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 90%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 75%;
+    --input: 0 0% 75%;
+    --ring: 217 91% 60%;
+    --radius: 0.5rem;
+    --surface: 210 40% 98%;
+    --surface-hover: 210 40% 96%;
+
+    /* WCAG AA+ contrast ratios for accessibility */
+    --semantic-gold: 42 76% 31%;          /* 5.09:1 AA */
+    --semantic-orange: 28 100% 35%;       /* 4.83:1 AA */
+    --semantic-green: 152 82% 15%;        /* 7.13:1 AAA */
+    --semantic-blue: 212 84% 32%;         /* 7.84:1 AAA */
+    --semantic-red: 0 74% 42%;            /* 6.47:1 AA */
+    --semantic-purple: 263 70% 50%;       /* 5.51:1 AA */
+
+    /* Original game colors preserved for light theme */
+    --school-day: 33 75% 22%;             /* 9.20:1 AAA */
+    --school-night: 280 50% 22%;          /* 14.09:1 AAA */
+    --school-primal: 9 60% 26%;           /* 11.08:1 AAA */
+    --school-space: 192 48% 21%;          /* 10.56:1 AAA */
+    --school-neutral: 241 30% 31%;        /* 11.04:1 AAA */
+
+    --rarity-common: 152 82% 15%;         /* 7.13:1 AAA */
+    --rarity-uncommon: 152 82% 15%;       /* 7.13:1 AAA */
+    --rarity-rare: 210 100% 43%;          /* 4.81:1 AA */
+    --rarity-epic: 263 70% 50%;           /* 5.51:1 AA */
+    --rarity-legendary: 28 100% 35%;      /* 4.83:1 AA */
+    --rarity-mythic: 42 76% 31%;          /* 5.09:1 AA */
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button {
+    font-family: inherit;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}
+
+.lil-gui {
+  z-index: 50 !important;
+}
+
+.lil-gui select {
+  background-color: #1a1a1a;
+  color: #e5e5e5;
+}
+
+.lil-gui select option {
+  background-color: #1a1a1a;
+  color: #e5e5e5;
+}
+
+.resolved-value {
+  color: #FFA500;
+  font-weight: 700;
+  font-size: 1.1em;
+}
+
+.unresolved-value {
+  color: #8B0000;
+  font-weight: 700;
+  font-size: 1.1em;
+}
+
+.theme-light .resolved-value {
+  color: #CC7A00;
+}
+
+.theme-light .unresolved-value {
+  color: #CC0000;
+}
+

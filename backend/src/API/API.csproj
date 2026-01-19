@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>API</RootNamespace>
+    <AssemblyName>OldenEraExplorer</AssemblyName>
+    <!-- Assembly metadata for Task Manager / Activity Monitor -->
+    <Title>Olden Era Explorer</Title>
+    <Product>Olden Era Explorer</Product>
+    <AssemblyTitle>Olden Era Explorer</AssemblyTitle>
+    <!-- Single-file, self-contained publishing -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Hide console window on Windows, keep it on Linux/macOS for debugging -->
+    <OutputType Condition="$(RuntimeIdentifier.StartsWith('win'))">WinExe</OutputType>
+    <OutputType Condition="!$(RuntimeIdentifier.StartsWith('win')) AND '$(RuntimeIdentifier)' != ''">Exe</OutputType>
+    <!-- Disable web.config generation (not needed for self-contained desktop app) -->
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+    <!-- Set executable icon (Windows only) -->
+    <ApplicationIcon Condition="$(RuntimeIdentifier.StartsWith('win'))">..\..\..\frontend\public\favicon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.1" />
+    <PackageReference Include="NotificationIcon.NET" Version="1.2.8" />
+  </ItemGroup>
+
+  <!-- Embed frontend build as resources (only when wwwroot exists - populated by build script) -->
+  <ItemGroup Condition="Exists('wwwroot')">
+    <EmbeddedResource Include="wwwroot\**\*" LinkBase="wwwroot" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Domain/Domain.csproj" />
+    <ProjectReference Include="../Localization/Localization.csproj" />
+    <ProjectReference Include="../GameData/GameData.csproj" />
+    <ProjectReference Include="../AssetExtractor/AssetExtractor.csproj" />
+  </ItemGroup>
+
+  <!-- Custom unit stat icons (drawn by user, not from Unity assets) -->
+  <!-- Embed as resources directly into the executable -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\..\assets\CustomIcons\*.png">
+      <LogicalName>CustomAssets/%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- Embed favicon.ico for tray icon -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\..\frontend\public\favicon.ico" LogicalName="favicon.ico" />
+  </ItemGroup>
+
+  <!-- Copy native tray icon library for each platform -->
+  <Target Name="CopyTrayIconNativeLib" AfterTargets="Publish">
+    <!-- Windows native DLL -->
+    <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+      <TrayNativeLib>$(NuGetPackageRoot)notificationicon.net/1.2.8/runtimes/win-x64/native/notification_icon.dll</TrayNativeLib>
+    </PropertyGroup>
+    <!-- Linux native SO -->
+    <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+      <TrayNativeLib>$(NuGetPackageRoot)notificationicon.net/1.2.8/runtimes/linux-x64/native/libnotification_icon.so</TrayNativeLib>
+    </PropertyGroup>
+    <Copy SourceFiles="$(TrayNativeLib)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" Condition="Exists('$(TrayNativeLib)')" />
+    <Message Importance="high" Text="Copied tray icon native library: $(TrayNativeLib)" Condition="Exists('$(TrayNativeLib)')" />
+  </Target>
+
+</Project>

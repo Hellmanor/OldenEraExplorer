@@ -1,0 +1,45 @@
+# .NET / C#
+bin/
+obj/
+*.user
+*.suo
+*.cache
+.vs/
+*.DotSettings.user
+
+# Frontend / Node
+node_modules/
+dist/
+.vite/
+*.local
+
+# Environment
+.env
+.env.local
+.env.production
+appsettings.Development.json
+appsettings.Local.json
+
+# Extracted Assets (temporary cache)
+ExtractedAssets/
+*.glb
+*.png
+
+# Exception: Custom drawn icons (not extracted, need to be versioned)
+!assets/CustomIcons/*.png
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+.aider*
