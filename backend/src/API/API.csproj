@@ -54,9 +54,12 @@
     </EmbeddedResource>
   </ItemGroup>
 
-  <!-- Embed favicon.ico for tray icon -->
+  <!-- Embed tray icons for different platforms -->
   <ItemGroup>
+    <!-- Windows uses .ico format (multi-resolution) -->
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\..\frontend\public\favicon.ico" LogicalName="favicon.ico" />
+    <!-- Linux/macOS use PNG (24x24 for better tray compatibility) -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\..\frontend\public\tray-icon.png" LogicalName="tray-icon.png" />
   </ItemGroup>
 
   <!-- Copy native tray icon library for each platform -->

@@ -43,15 +43,21 @@ mkdir -p backend/src/API/wwwroot
 cp -r frontend/dist/* backend/src/API/wwwroot/
 echo "Frontend files ready for embedding!"
 
+# Generate tray icon for Linux/macOS (24x24 PNG from favicon.ico)
+echo ""
+echo "Step 3: Generating platform-specific tray icon..."
+convert frontend/public/favicon.ico -resize 24x24 frontend/public/tray-icon.png
+echo "Tray icon generated!"
+
 # Clean dist directory
 echo ""
-echo "Step 3: Cleaning dist directory..."
+echo "Step 4: Cleaning dist directory..."
 rm -rf dist
 mkdir -p dist
 
 # Build backend for each RID
 echo ""
-echo "Step 4: Building backend for all platforms..."
+echo "Step 5: Building backend for all platforms..."
 for rid in "${RIDS[@]}"; do
     echo ""
     echo "  Building for $rid..."
@@ -80,12 +86,13 @@ done
 
 # Clean up wwwroot from source (it was only needed for embedding)
 echo ""
-echo "Step 5: Cleaning up temporary build files..."
+echo "Step 6: Cleaning up temporary build files..."
 rm -rf backend/src/API/wwwroot
+rm -f frontend/public/tray-icon.png
 echo "Cleanup complete!"
 
 echo ""
-echo "Step 6: Creating zip packages..."
+echo "Step 7: Creating zip packages..."
 for rid in "${RIDS[@]}"; do
     echo "  Zipping $rid..."
     cd "dist/$rid"

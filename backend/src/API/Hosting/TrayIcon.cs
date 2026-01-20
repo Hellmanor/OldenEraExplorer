@@ -43,7 +43,8 @@ public static class TrayIconExtensions
     {
         try
         {
-            var iconResourceName = "favicon.ico";
+            // Windows supports .ico format (multi-resolution), Linux/macOS work better with PNG
+            var iconResourceName = OperatingSystem.IsWindows() ? "favicon.ico" : "tray-icon.png";
             var assembly = typeof(TrayIconExtensions).Assembly;
             using var stream = assembly.GetManifestResourceStream(iconResourceName);
 
