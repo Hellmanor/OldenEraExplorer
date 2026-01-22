@@ -1,5 +1,9 @@
 # Olden Era Explorer
 
+[![Downloads](https://img.shields.io/github/downloads/laszlo-gilanyi/OldenEraExplorer/total.svg?color=blue)](https://github.com/laszlo-gilanyi/OldenEraExplorer/releases)
+[![Downloads@Latest](https://img.shields.io/github/downloads/laszlo-gilanyi/OldenEraExplorer/latest/total.svg?color=brightgreen)](https://github.com/laszlo-gilanyi/OldenEraExplorer/releases/latest)
+[![Release](https://img.shields.io/github/v/release/laszlo-gilanyi/OldenEraExplorer?color=orange)](https://github.com/laszlo-gilanyi/OldenEraExplorer/releases/latest)
+
 Fan-made browser for Heroes of Might and Magic: Olden Era game data.
 Browse units, heroes, spells, artifacts, buildings, and 3D models without opening the game.
 

@@ -154,7 +154,7 @@ function App() {
     <div className="h-screen flex flex-col overflow-hidden">
       <header className="px-6 py-4 border-b border-border bg-card flex justify-between items-center relative">
         <div className="flex items-center gap-4 max-[1050px]:gap-3">
-          <img src="/favicon.ico" alt="Logo" className="w-8 h-8 max-[1050px]:w-7 max-[1050px]:h-7" />
+          <img src="/icon.png" alt="Logo" className="w-8 h-8 max-[1050px]:w-7 max-[1050px]:h-7" />
           <h1 className="m-0 text-2xl max-[1050px]:text-xl text-foreground">{label('app_title')}</h1>
         </div>
         <div className="flex items-center gap-3">

@@ -20,9 +20,30 @@
     <OutputType Condition="!$(RuntimeIdentifier.StartsWith('win')) AND '$(RuntimeIdentifier)' != ''">Exe</OutputType>
     <!-- Disable web.config generation (not needed for self-contained desktop app) -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
-    <!-- Set executable icon (Windows only) -->
-    <ApplicationIcon Condition="$(RuntimeIdentifier.StartsWith('win'))">..\..\..\frontend\public\favicon.ico</ApplicationIcon>
+    <!-- Disable StaticWebAssets in dev mode (frontend served by Vite) -->
+    <StaticWebAssetsEnabled Condition="'$(Configuration)' == 'Debug'">false</StaticWebAssetsEnabled>
+    <!-- Set executable icon (Windows only - works on any OS during build, only applies when targeting Windows) -->
+    <ApplicationIcon>..\..\..\frontend\public\icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <!-- Build frontend and copy to wwwroot (Release only) -->
+  <Target Name="BuildFrontend" BeforeTargets="ResolveAssemblyReferences" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <FrontendDir>$(MSBuildThisFileDirectory)..\..\..\frontend</FrontendDir>
+      <WwwrootDir>$(MSBuildThisFileDirectory)wwwroot</WwwrootDir>
+    </PropertyGroup>
+    <Exec Command="npm install" WorkingDirectory="$(FrontendDir)" Condition="!Exists('$(FrontendDir)\node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(FrontendDir)" />
+    <RemoveDir Directories="$(WwwrootDir)" />
+    <ItemGroup>
+      <FrontendFiles Include="$(FrontendDir)\dist\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FrontendFiles)" DestinationFolder="$(WwwrootDir)\%(RecursiveDir)" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(WwwrootDir)\**\*" LinkBase="wwwroot" />
+    </ItemGroup>
+    <Message Importance="high" Text="Frontend built and embedded" />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
@@ -30,10 +51,6 @@
     <PackageReference Include="NotificationIcon.NET" Version="1.2.8" />
   </ItemGroup>
 
-  <!-- Embed frontend build as resources (only when wwwroot exists - populated by build script) -->
-  <ItemGroup Condition="Exists('wwwroot')">
-    <EmbeddedResource Include="wwwroot\**\*" LinkBase="wwwroot" />
-  </ItemGroup>
 
   <PropertyGroup>
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
@@ -54,12 +71,10 @@
     </EmbeddedResource>
   </ItemGroup>
 
-  <!-- Embed tray icons for different platforms -->
-  <ItemGroup>
-    <!-- Windows uses .ico format (multi-resolution) -->
-    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\..\frontend\public\favicon.ico" LogicalName="favicon.ico" />
-    <!-- Linux/macOS use PNG (24x24 for better tray compatibility) -->
-    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\..\frontend\public\tray-icon.png" LogicalName="tray-icon.png" />
+  <!-- Embed tray icons (Release only - dev mode uses terminal) -->
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\..\frontend\public\icon.ico" LogicalName="icon.ico" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\..\frontend\public\icon.png" LogicalName="icon.png" />
   </ItemGroup>
 
   <!-- Copy native tray icon library for each platform -->

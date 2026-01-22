@@ -9,6 +9,7 @@ obj/
 
 # Frontend / Node
 node_modules/
+package-lock.json
 dist/
 .vite/
 *.local
@@ -27,6 +28,11 @@ ExtractedAssets/
 
 # Exception: Custom drawn icons (not extracted, need to be versioned)
 !assets/CustomIcons/*.png
+# Exception: App icon (need to be versioned)
+!frontend/public/icon.png
+
+# Generated frontend build (created by Release build)
+backend/src/API/wwwroot/
 
 # IDE
 .idea/

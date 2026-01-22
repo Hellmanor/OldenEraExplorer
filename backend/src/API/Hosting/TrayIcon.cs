@@ -43,18 +43,17 @@ public static class TrayIconExtensions
     {
         try
         {
-            // Windows supports .ico format (multi-resolution), Linux/macOS work better with PNG
-            var iconResourceName = OperatingSystem.IsWindows() ? "favicon.ico" : "tray-icon.png";
             var assembly = typeof(TrayIconExtensions).Assembly;
-            using var stream = assembly.GetManifestResourceStream(iconResourceName);
+            var iconName = OperatingSystem.IsWindows() ? "icon.ico" : "icon.png";
+            using var stream = assembly.GetManifestResourceStream(iconName);
 
             if (stream == null)
             {
-                Console.WriteLine($"Tray icon: embedded resource '{iconResourceName}' not found");
+                Console.WriteLine($"Tray icon: embedded resource '{iconName}' not found");
                 return (null, null);
             }
 
-            var tempPath = Path.Combine(Path.GetTempPath(), $"olden-era-explorer-{iconResourceName}");
+            var tempPath = Path.Combine(Path.GetTempPath(), $"olden-era-explorer-{iconName}");
             using (var fileStream = File.Create(tempPath))
             {
                 stream.CopyTo(fileStream);

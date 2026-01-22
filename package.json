@@ -4,6 +4,10 @@
   "private": true,
   "description": "A localhost web application for browsing Heroes of Might and Magic: Olden Era game data",
   "license": "GPL-3.0-only",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=11.0.0"
+  },
   "workspaces": [
     "frontend"
   ],
@@ -16,7 +20,7 @@
     "@types/three": "0.176.0"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
-    "wait-on": "^9.0.3"
+    "concurrently": "9.1.2",
+    "wait-on": "9.0.3"
   }
 }

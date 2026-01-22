@@ -1,0 +1,33 @@
+# Auto-detect text files and normalize line endings to LF in the repo
+* text=auto
+
+# C# / .NET
+*.cs text diff=csharp
+*.csproj text
+*.slnx text
+
+# Web / Frontend (no built-in diff driver for JS/TS yet)
+*.ts text
+*.tsx text
+*.js text
+*.css text diff=css
+*.html text diff=html
+
+# Data / Config
+*.json text
+*.yml text
+*.yaml text
+
+# Documentation
+*.md text diff=markdown
+*.txt text
+
+# Binary files
+*.png binary
+*.ico binary
+
+# Windows batch files should keep CRLF
+*.bat text eol=crlf
+
+# Mark vendored/third-party code to exclude from GitHub language statistics
+backend/src/AssetExtractor/AssetRipper/** linguist-vendored
