@@ -17,6 +17,20 @@
   "label_squad_value": "部隊価値",
   "label_ability_tier": "アビリティランク: {0}",
   "label_ability_cost": "アビリティコスト: {0}",
+  "label_chance": "確率",
+  "label_rewards": "報酬",
+  "label_option": "オプション",
+
+  "label_common_rarity": "コモン",
+  "label_rare_rarity": "レア",
+  "label_epic_rarity": "エピック",
+  "label_legendary_rarity": "レジェンダリー",
+
+  "none": "なし",
+  "duration": "持続時間: {0}日",
+  "viewRadius": "{0} 視界範囲",
+  "movementBonus": "{0} 移動ポイント",
+  "manaRestore": "毎日{0}マナ回復",
 
   "app_title": "Olden Era Explorer",
 

@@ -17,6 +17,20 @@
   "label_squad_value": "Truppenwert",
   "label_ability_tier": "Fähigkeitsklasse: {0}",
   "label_ability_cost": "Fähigkeitskosten: {0}",
+  "label_chance": "chance",
+  "label_rewards": "Belohnungen",
+  "label_option": "Wahl",
+
+  "label_common_rarity": "Gewöhnliche",
+  "label_rare_rarity": "Seltene",
+  "label_epic_rarity": "Epische",
+  "label_legendary_rarity": "Legendäre",
+
+  "none": "Nichts",
+  "duration": "Dauer: {0} Tag(e)",
+  "viewRadius": "{0} Sichtradius",
+  "movementBonus": "{0} Bewegungspunkte",
+  "manaRestore": "{0} täglich wiederhergestelltes Mana",
 
   "app_title": "Olden Era Explorer",
 

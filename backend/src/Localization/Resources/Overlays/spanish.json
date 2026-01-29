@@ -17,6 +17,20 @@
   "label_squad_value": "Valor de la escuadra",
   "label_ability_tier": "Nivel de aptitud: {0}",
   "label_ability_cost": "Coste de aptitud: {0}",
+  "label_chance": "probabilidad",
+  "label_rewards": "Recompensas",
+  "label_option": "Opción",
+
+  "label_common_rarity": "Común",
+  "label_rare_rarity": "Rara",
+  "label_epic_rarity": "Épica",
+  "label_legendary_rarity": "Legendaria",
+
+  "none": "Nada",
+  "duration": "Duración: {0} día(s)",
+  "viewRadius": "{0} radio de visión",
+  "movementBonus": "{0} puntos de movimiento",
+  "manaRestore": "{0} maná restaurado diariamente",
 
   "app_title": "Olden Era Explorer",
 

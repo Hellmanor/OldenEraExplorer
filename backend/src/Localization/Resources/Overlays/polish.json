@@ -17,6 +17,20 @@
   "label_squad_value": "Wartość oddziału",
   "label_ability_tier": "Stopień zdolności: {0}",
   "label_ability_cost": "Koszt zdolności: {0}",
+  "label_chance": "szansa",
+  "label_rewards": "Nagrody",
+  "label_option": "Opcja",
+
+  "label_common_rarity": "Powszechna",
+  "label_rare_rarity": "Rzadka",
+  "label_epic_rarity": "Epicka",
+  "label_legendary_rarity": "Legendarna",
+
+  "none": "Nic",
+  "duration": "Czas trwania: {0} dni",
+  "viewRadius": "{0} zasięg widzenia",
+  "movementBonus": "{0} punktów ruchu",
+  "manaRestore": "{0} many odnawianej dziennie",
 
   "app_title": "Olden Era Explorer",
 

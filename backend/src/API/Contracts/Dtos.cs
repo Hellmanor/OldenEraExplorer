@@ -144,13 +144,17 @@ public record ModelStatusDto(
 );
 
 /// Game doesn't provide icon paths for map objects. Derived from PrefabPath by convention.
+/// Filter metadata (BankType, HasGuards, RewardTypes) enables frontend filtering without detail queries.
 public record MapObjectListItemDto(
     string Id,
     string Name,
     string? Category,
     string? Icon,
     bool IsOrphan = false,
-    string? PrefabPath = null
+    string? PrefabPath = null,
+    string? BankType = null,
+    bool? HasGuards = null,
+    IReadOnlyList<string>? RewardTypes = null
 );
 
 public record MapObjectDetailDto(
@@ -158,7 +162,123 @@ public record MapObjectDetailDto(
     string Name,
     string? Description,
     string? NarrativeDescription,
-    string? Icon
+    string? Icon,
+    CreatureBankInfoDto? CreatureBankInfo
+);
+
+public record CreatureBankInfoDto(
+    bool HasGuards,
+    string VisitType,
+    List<CreatureBankVariantInfoDto> Variants,
+    bool IsBarracks = false,
+    List<DifficultyLevelDto>? DifficultyLevels = null,
+    string? DifficultyLabel = null,
+    string? GuardsLabel = null,
+    string? BankType = null
+);
+
+public record CreatureBankVariantInfoDto(
+    double RollChance,
+    int Value,
+    int? CustomGuardValue,
+    List<GuardUnitInfoDto> Guards,
+    CategorizedRewardsDto Rewards,
+    string? RewardApplyType = null,
+    List<CategorizedRewardsDto>? RewardOptions = null
+);
+
+public record GuardUnitInfoDto(
+    string UnitId,
+    string UnitName,
+    int Amount,
+    string Icon,
+    int? MinAmount = null,
+    int? MaxAmount = null
+);
+
+/// All parsing is done server-side - frontend just displays.
+public record CategorizedRewardsDto(
+    List<ResourceRewardEntryDto> Resources,
+    List<ArtifactRarityPoolDto> ArtifactPools,
+    List<SpellPoolOptionDto> SpellPools,
+    List<GuardUnitInfoDto> Units,
+    int? Experience,
+    List<CursePoolDto>? CursePools = null
+);
+
+public record ResourceRewardEntryDto(
+    string ResourceKey,
+    string DisplayName,
+    int Amount
+);
+
+public record ArtifactRarityPoolDto(
+    string Rarity,
+    string RarityLabel,
+    int Draws,
+    List<ArtifactPoolGroupDto> Groups
+);
+
+public record ArtifactPoolGroupDto(
+    string GroupName,
+    string Rarity,
+    int Count,
+    double Percentage,
+    List<ArtifactPoolItemDto> Artifacts
+);
+
+public record ArtifactPoolItemDto(
+    string Id,
+    string Name,
+    string Rarity,
+    string Icon
+);
+
+public record SpellPoolOptionDto(
+    List<SpellPoolGroupDto> Groups
+);
+
+public record SpellPoolGroupDto(
+    string TierName,
+    int Tier,
+    double Weight,
+    int Count,
+    List<SpellPoolItemDto> Spells
+);
+
+public record SpellPoolItemDto(
+    string Id,
+    string Name,
+    int Rank,
+    string Icon
+);
+
+public record DifficultyLevelDto(
+    string Name,
+    double Power,
+    string Icon,
+    string? Tooltip = null
+);
+
+/// Used for map objects like Hero's Crypt that apply debuffs along with rewards.
+public record CursePoolDto(
+    string Title,
+    List<CurseInfoDto> Curses,
+    int DurationDays
+);
+
+/// Name and description may be null if not localized (e.g., for invisible curses).
+public record CurseInfoDto(
+    string Id,
+    string? Name,
+    string? Description,
+    List<CurseEffectDto> Effects
+);
+
+public record CurseEffectDto(
+    string Stat,
+    string StatDisplayName,
+    string Modifier
 );
 
 public record ArtifactListItemDto(
