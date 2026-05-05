@@ -641,6 +641,13 @@ public class StandaloneTextureExtractor : IDisposable
                 }
             }
 
+            // "rang" = rank frame textures; "property 1=" is Unity's naming convention for UI component state variants
+            if (fileName.Contains("button") ||
+                fileName.Contains("icon") ||
+                fileName.StartsWith("rang") ||
+                fileName.StartsWith("property 1="))
+                return true;
+
             return false;
         }
 

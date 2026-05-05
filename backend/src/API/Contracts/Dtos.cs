@@ -88,6 +88,7 @@ public record UnitDetailDto(
     IReadOnlyList<AbilityDetailDto>? PassiveAbilities,
     IReadOnlyList<AbilityDetailDto>? ActiveAbilities,
     IReadOnlyList<UnitCostEntryDto>? CostEntries,
+    IReadOnlyList<UnitCostEntryDto>? UpgradeCostEntries,
     IReadOnlyList<UsedByHeroDto>? UsedByHeroes,
     UnitStatLabelsDto? StatLabels
 );
@@ -306,6 +307,7 @@ public record ArtifactDetailDto(
     string? UpgradeDescription,
     string? UpgradeCost,
     string? UpgradeCostNote,
+    string? DestroyReward,
     ArtifactSetBonusDto? SetBonus
 );
 
@@ -348,9 +350,14 @@ public record BuildingDetailDto(
     string? Description,
     string? IconPath,
     IReadOnlyList<BuildingCostDto>? Costs,
+    string? CostLabel,
     IReadOnlyList<BuildingEffectDto>? Effects,
     IReadOnlyList<BuildingRequirementDto>? Requirements,
-    IReadOnlyList<RecruitableUnitDto>? RecruitableUnits
+    string? RequirementsLabel,
+    IReadOnlyList<RecruitableUnitDto>? RecruitableUnits,
+    string? RecruitableUnitsLabel,
+    IReadOnlyList<BuildingUpgradeOptionDto>? UpgradeOptions,
+    string? UpgradesLabel
 );
 
 public record BuildingCostDto(
@@ -366,6 +373,12 @@ public record BuildingEffectDto(
 public record BuildingRequirementDto(
     string BuildingName,
     string BuildingId
+);
+
+public record BuildingUpgradeOptionDto(
+    string Sid,
+    string? IconPath,
+    string Description
 );
 
 public record RecruitableUnitDto(

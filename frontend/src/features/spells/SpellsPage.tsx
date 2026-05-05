@@ -8,7 +8,7 @@ import SearchBox from '@/features/search/SearchBox';
 import ErrorBoundary from '@/components/feedback/ErrorBoundary';
 import UsedBySection from '@/components/display/UsedBySection';
 import SortableColumnHeader, { type SortDirection } from '@/components/display/SortableColumnHeader';
-import type { SpellListItemDto, SpellDetailDto } from '@/api/types';
+import type { SpellListItemDto, SpellDetailDto, SkillReferenceDto } from '@/api/types';
 import ProgressiveIcon from '@/components/display/ProgressiveIcon';
 import RichText from '@/components/display/RichText';
 import DetailContainer from '@/components/display/DetailContainer';
@@ -218,6 +218,9 @@ function SpellDetailPanel({
               <div className="mt-1 text-muted-foreground text-sm">
                 {spell.category}
               </div>
+              {spell.relatedSkill && (
+                <RelatedSkillLink skill={spell.relatedSkill} />
+              )}
             </div>
           </div>
         </div>
@@ -256,8 +259,25 @@ function SpellDetailPanel({
                   />
                 )}
 
-                <div className="mt-3 text-semantic-blue text-sm">
-                  {label('spell_mana', level.manaCost)}
+                <div className="mt-3 flex items-center gap-4 text-sm">
+                  {level.starDustCost != null && (
+                    <span className="flex items-center gap-1 text-semantic-gold font-semibold">
+                      <img
+                        src="/api/assets/png/Assets/Texture2D/Mana_icon.png"
+                        alt="astrology"
+                        className="w-8 h-8"
+                      />
+                      <strong>{level.starDustCost}</strong>
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 text-semantic-blue font-semibold">
+                    <img
+                      src="/api/assets/png/Assets/Texture2D/Icon_Stats_Mana.png"
+                      alt="mana"
+                      className="w-8 h-8"
+                    />
+                    <strong>{label('spell_mana', level.manaCost)}</strong>
+                  </span>
                 </div>
               </div>
             ))}
@@ -266,6 +286,21 @@ function SpellDetailPanel({
 
         <UsedBySection entityType="spell" entityId={spell.id} />
     </DetailContainer>
+  );
+}
+
+function RelatedSkillLink({ skill }: { skill: SkillReferenceDto }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate(`/skills/${skill.id}`)}
+      className="mt-2 flex items-center gap-2 px-2 py-1 -ml-2 rounded-md cursor-pointer hover:bg-accent transition-colors text-left"
+    >
+      {skill.icon && (
+        <ProgressiveIcon iconPath={skill.icon} alt={skill.name} size={24} className="shrink-0" />
+      )}
+      <span className="text-foreground text-sm font-medium">{skill.name}</span>
+    </button>
   );
 }
 

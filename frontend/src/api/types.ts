@@ -50,6 +50,7 @@ export interface UnitDetailDto {
   passiveAbilities: AbilityDetailDto[] | null;
   activeAbilities: AbilityDetailDto[] | null;
   costEntries: UnitCostEntryDto[] | null;
+  upgradeCostEntries?: UnitCostEntryDto[] | null;
   usedByHeroes: UsedByHeroDto[] | null;
   statLabels: UnitStatLabelsDto | null;
 }
@@ -185,6 +186,13 @@ export interface SpellDetailDto {
   exceptionText: string | null;
   isBonusSpell: boolean;
   levels: SpellLevelDto[] | null;
+  relatedSkill: SkillReferenceDto | null;
+}
+
+export interface SkillReferenceDto {
+  id: string;
+  name: string;
+  icon: string | null;
 }
 
 export interface SpellLevelDto {
@@ -192,6 +200,7 @@ export interface SpellLevelDto {
   manaCost: number;
   description: string | null;
   bonusDescription: string | null;
+  starDustCost: number | null;
 }
 
 // Skill types
@@ -226,6 +235,21 @@ export interface SubSkillDto {
   name: string;
   description: string | null;
   icon: string | null;
+  grantedSpell?: SpellLinkDto | null;
+  grantedBattleAbility?: BattleAbilityLinkDto | null;
+}
+
+export interface SpellLinkDto {
+  id: string;
+  name: string;
+  icon: string | null;
+}
+
+export interface BattleAbilityLinkDto {
+  id: string;
+  name: string;
+  icon: string | null;
+  description: string | null;
 }
 
 // Map Object types
@@ -562,6 +586,7 @@ export interface ArtifactDetailDto {
   upgradeDescription: string | null;
   upgradeCost: string | null;
   upgradeCostNote: string | null;
+  destroyReward: string | null;
   setBonus: ArtifactSetBonusDto | null;
 }
 
@@ -604,9 +629,20 @@ export interface BuildingDetailDto {
   description: string | null;
   iconPath: string | null;
   costs: BuildingCostDto[] | null;
+  costLabel: string | null;
   effects: BuildingEffectDto[] | null;
   requirements: BuildingRequirementDto[] | null;
+  requirementsLabel: string | null;
   recruitableUnits: RecruitableUnitDto[] | null;
+  recruitableUnitsLabel: string | null;
+  upgradeOptions: BuildingUpgradeOptionDto[] | null;
+  upgradesLabel: string | null;
+}
+
+export interface BuildingUpgradeOptionDto {
+  sid: string;
+  iconPath: string | null;
+  description: string;
 }
 
 export interface BuildingCostDto {

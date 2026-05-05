@@ -4,9 +4,6 @@ using Localization.Resolution;
 
 namespace Localization.Scripting.Operations;
 
-/// <summary>
-/// Skill operations: CurrentSkillParameter, CurrentSubSkill
-/// </summary>
 public sealed class SkillAccessOperations : IScriptOperation
 {
     private readonly DbAccessor _db;
@@ -18,7 +15,7 @@ public sealed class SkillAccessOperations : IScriptOperation
 
     public IReadOnlyList<string> SupportedOperations { get; } = new[]
     {
-        "CurrentSkillParameter", "CurrentSubSkill"
+        "CurrentSkillParameter", "CurrentSubSkill", "CurrentSkillLevel"
     };
 
     public bool Execute(
@@ -34,8 +31,16 @@ public sealed class SkillAccessOperations : IScriptOperation
         {
             "CurrentSkillParameter" => ExecuteCurrentSkillParameter(A(0), A(1), context, env),
             "CurrentSubSkill" => ExecuteCurrentSubSkill(A(0), A(1), context, env),
+            "CurrentSkillLevel" => ExecuteCurrentSkillLevel(A(0), context, env),
             _ => false
         };
+    }
+
+    private bool ExecuteCurrentSkillLevel(string target, ResolutionContext ctx, ScriptEnvironment env)
+    {
+        if (ctx.SkillLevel is null) return false;
+        env.Set(target, (double)ctx.SkillLevel.Value);
+        return true;
     }
 
     private bool ExecuteCurrentSkillParameter(string target, string path, ResolutionContext ctx, ScriptEnvironment env)

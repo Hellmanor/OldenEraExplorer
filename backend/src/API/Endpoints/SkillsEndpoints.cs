@@ -13,7 +13,6 @@ public static class SkillsEndpoints
             .WithTags("Skills")
             ;
 
-        // GET /api/skills - List all skills
         group.MapGet("/", GetSkills)
             .WithName("GetSkills")
             .WithSummary("List all skills")
@@ -21,7 +20,6 @@ public static class SkillsEndpoints
             .Produces<List<SkillListItemDto>>(200)
             .Produces<ErrorDto>(503);
 
-        // GET /api/skills/{id} - Get skill details
         group.MapGet("/{id}", GetSkillById)
             .WithName("GetSkillById")
             .WithSummary("Get skill details")
@@ -109,7 +107,7 @@ public static class SkillsEndpoints
             ));
         }
 
-        var dto = MapToDetail(skill, skillsIndex, resolver, langIndex, locale);
+        var dto = MapToDetail(skill, skillsIndex, resolver, langIndex, locale, data);
         return Results.Ok(dto);
     }
 
@@ -138,7 +136,8 @@ public static class SkillsEndpoints
         SkillsIndex skillsIndex,
         ITextResolver resolver,
         Localization.Indexing.LangIndex langIndex,
-        string locale)
+        string locale,
+        GameDataLoadResult data)
     {
         SkillLevelDto? level1 = null, level2 = null, level3 = null;
 
@@ -158,7 +157,7 @@ public static class SkillsEndpoints
         {
             var lvl2 = skill.LevelParams[1];
             var lvl2Ctx = new ResolutionContext(locale) { SkillId = skill.SkillId, SkillLevel = 2 };
-            var subSkills2 = BuildSubSkillDtos(lvl2.SubSkills, skill.SkillId, skillsIndex, resolver, langIndex, locale);
+            var subSkills2 = BuildSubSkillDtos(lvl2.SubSkills, skill.SkillId, skillsIndex, resolver, langIndex, locale, data);
             level2 = new SkillLevelDto(
                 LevelName: ResolveText(resolver, lvl2.NameSid, lvl2Ctx, langIndex) ?? "Advanced",
                 Description: ResolveText(resolver, lvl2.DescSid, lvl2Ctx, langIndex),
@@ -171,7 +170,7 @@ public static class SkillsEndpoints
         {
             var lvl3 = skill.LevelParams[2];
             var lvl3Ctx = new ResolutionContext(locale) { SkillId = skill.SkillId, SkillLevel = 3 };
-            var subSkills3 = BuildSubSkillDtos(lvl3.SubSkills, skill.SkillId, skillsIndex, resolver, langIndex, locale);
+            var subSkills3 = BuildSubSkillDtos(lvl3.SubSkills, skill.SkillId, skillsIndex, resolver, langIndex, locale, data);
             level3 = new SkillLevelDto(
                 LevelName: ResolveText(resolver, lvl3.NameSid, lvl3Ctx, langIndex) ?? "Expert",
                 Description: ResolveText(resolver, lvl3.DescSid, lvl3Ctx, langIndex),
@@ -200,7 +199,8 @@ public static class SkillsEndpoints
         SkillsIndex skillsIndex,
         ITextResolver resolver,
         Localization.Indexing.LangIndex langIndex,
-        string locale)
+        string locale,
+        GameDataLoadResult data)
     {
         var result = new List<SubSkillDto>();
 
@@ -218,11 +218,50 @@ public static class SkillsEndpoints
             var name = ResolveText(resolver, subSkill.NameSid, ctx, langIndex);
             var desc = ResolveText(resolver, subSkill.DescSid, ctx, langIndex);
 
+            SpellLinkDto? grantedSpell = null;
+            if (skillsIndex.SubSkillToMagics.TryGetValue(subSkillId, out var magicIds) && magicIds.Count > 0)
+            {
+                var spellId = magicIds[0];
+                if (data.SpellsIndex.Spells.TryGetValue(spellId, out var spellRecord))
+                {
+                    var spellCtx = new ResolutionContext(locale);
+                    var spellName = ResolveText(resolver, spellRecord.NameSid, spellCtx, langIndex);
+                    if (!string.IsNullOrWhiteSpace(spellName))
+                    {
+                        grantedSpell = new SpellLinkDto(
+                            Id: spellId,
+                            Name: spellName,
+                            Icon: string.IsNullOrEmpty(spellRecord.Icon) ? null : $"icons/hero_magics/{spellRecord.Icon}"
+                        );
+                    }
+                }
+            }
+
+            BattleAbilityLinkDto? grantedBattleAbility = null;
+            if (!string.IsNullOrEmpty(subSkill.GrantedBattleAbilityId) &&
+                skillsIndex.HeroAbilities.TryGetValue(subSkill.GrantedBattleAbilityId, out var abilityRecord))
+            {
+                var abilityCtx = new ResolutionContext(locale) { SubSkillId = subSkillId, SkillId = skillId, HeroAbilityId = subSkill.GrantedBattleAbilityId };
+                var abilityName = ResolveText(resolver, abilityRecord.NameSid, abilityCtx, langIndex);
+                if (!string.IsNullOrWhiteSpace(abilityName))
+                {
+                    var abilityDesc = ResolveText(resolver, abilityRecord.DescSid, abilityCtx, langIndex);
+                    grantedBattleAbility = new BattleAbilityLinkDto(
+                        Id: subSkill.GrantedBattleAbilityId,
+                        Name: abilityName,
+                        Icon: $"icons/hero_abilities/{subSkill.GrantedBattleAbilityId}",
+                        Description: abilityDesc
+                    );
+                }
+            }
+
             result.Add(new SubSkillDto(
                 Id: subSkillId,
                 Name: name ?? subSkillId,
                 Description: desc,
-                Icon: string.IsNullOrEmpty(subSkill.Icon) ? null : $"icons/hero_sub_skills/{subSkill.Icon}"
+                Icon: string.IsNullOrEmpty(subSkill.Icon) ? null : $"icons/hero_sub_skills/{subSkill.Icon}",
+                GrantedSpell: grantedSpell,
+                GrantedBattleAbility: grantedBattleAbility
             ));
         }
 
@@ -308,7 +347,6 @@ public static class SkillsEndpoints
         {
         }
 
-        // Fallback to lang index
         return langIndex.ResolveText(sid);
     }
 }
