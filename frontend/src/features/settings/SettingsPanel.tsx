@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSettings, useUpdateSettings, useLocales } from './useSettings';
+import { useSettings, useUpdateSettings, useLocales, useCheckUpdate, useInstallUpdate, useUpdateProgress } from './useSettings';
 import { useGameStatus, useGameDetect, useSetGamePath, useLoadGameData } from '@/hooks/useGameStatus';
 import { FolderPickerModal } from '@/components/ui/FolderPickerModal';
 import { useOnClickOutside } from '@/hooks/useOnClickOutside';
@@ -53,6 +53,21 @@ export function SettingsPanel() {
   const { data: gameStatus } = useGameStatus();
   const updateSettings = useUpdateSettings();
   const { label } = useLabels();
+
+  const { data: availableRelease, refetch: checkUpdate, isFetching: isCheckingUpdate, error: checkUpdateError } = useCheckUpdate();
+  const installUpdate = useInstallUpdate();
+  const [isInstalling, setIsInstalling] = useState(false);
+  const { data: installProgress } = useUpdateProgress(isInstalling);
+
+  const hasUpdate = !!availableRelease;
+  const isOffline = !!checkUpdateError;
+  const appVersion = settings?.version ?? '';
+
+  useEffect(() => {
+    if (installProgress?.stage === 'error') {
+      setIsInstalling(false);
+    }
+  }, [installProgress?.stage]);
 
   const detectMutation = useGameDetect();
   const setPathMutation = useSetGamePath();
@@ -160,9 +175,30 @@ export function SettingsPanel() {
     updateSettings.mutate({ autoExtractEnabled: !currentAutoExtract });
   };
 
+  const handleMinimizeToTrayToggle = () => {
+    updateSettings.mutate({ minimizeToTray: !currentMinimizeToTray });
+  };
+
+  const handleAutoUpdateToggle = () => {
+    updateSettings.mutate({ autoUpdateEnabled: !currentAutoUpdate });
+  };
+
+  const handleVerboseLoggingToggle = () => {
+    updateSettings.mutate({ verboseLogging: !currentVerboseLogging });
+  };
+
+  const handleInstallUpdate = () => {
+    if (!availableRelease) return;
+    setIsInstalling(true);
+    installUpdate.mutate(availableRelease);
+  };
+
   const currentLocale = settings?.locale ?? 'english';
   const currentUsePlaceholderResolver = settings?.usePlaceholderResolver ?? false;
   const currentAutoExtract = settings?.autoExtractEnabled ?? false;
+  const currentMinimizeToTray = settings?.minimizeToTray ?? true;
+  const currentAutoUpdate = settings?.autoUpdateEnabled ?? true;
+  const currentVerboseLogging = settings?.verboseLogging ?? false;
 
   const candidates = detectMutation.data?.candidates || [];
   const isDetecting = detectMutation.isPending;
@@ -184,10 +220,25 @@ export function SettingsPanel() {
             : "text-muted-foreground hover:text-foreground hover:bg-accent"
         )}
       >
-        <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z" />
-          <path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
-        </svg>
+        <span className="relative inline-flex">
+          <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z" />
+            <path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+          </svg>
+          {hasUpdate && !isInstalling && (
+            <span
+              aria-label={label('settings_update_available', availableRelease!.tagName)}
+              className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-semantic-orange ring-2 ring-background flex items-center justify-center animate-pulse-soft"
+            >
+              <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M8 16H3v5" />
+              </svg>
+            </span>
+          )}
+        </span>
         <span>{label('settings_header')}</span>
         <svg
           className={cn("h-5 w-5 opacity-60 transition-transform", isOpen && "rotate-180")}
@@ -312,44 +363,102 @@ export function SettingsPanel() {
               <div className="p-3 border-t border-border space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-medium text-foreground">{label('settings_resolver')}</div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={currentUsePlaceholderResolver}
-                    onClick={handleResolverToggle}
-                    className={cn(
-                      "relative w-9 h-5 rounded-full transition-colors flex items-center px-0.5 cursor-pointer",
-                      currentUsePlaceholderResolver ? "bg-primary" : "bg-muted-foreground/40"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "w-3.5 h-3.5 bg-white rounded-full shadow transition-transform",
-                        currentUsePlaceholderResolver && "translate-x-[18px]"
-                      )}
-                    />
-                  </button>
+                  <Switch checked={currentUsePlaceholderResolver} onCheckedChange={handleResolverToggle} />
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-medium text-foreground">{label('extraction_auto_extract')}</div>
+                  <Switch checked={currentAutoExtract} onCheckedChange={handleAutoExtractToggle} />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-semantic-blue">{label('settings_minimize_to_tray')}</div>
+                  <Switch checked={currentMinimizeToTray} onCheckedChange={handleMinimizeToTrayToggle} variant="blue" />
+                </div>
+              </div>
+
+              <div className="p-3 border-t border-border space-y-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">{label('settings_version')}: </span>
+                    <span className="text-foreground font-medium">{appVersion || '—'}</span>
+                  </div>
+
+                  {isInstalling ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Spinner size="sm" />
+                      {installProgress?.message ?? 'Installing...'}
+                    </span>
+                  ) : isOffline ? (
+                    <span className="text-xs font-semibold text-destructive">
+                      {label('extraction_offline')}
+                    </span>
+                  ) : hasUpdate ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-semantic-orange/15 text-semantic-orange border border-semantic-orange/30 text-xs font-medium">
+                      {label('settings_update_available', availableRelease!.tagName)}
+                    </span>
+                  ) : isCheckingUpdate ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse">
+                      <Spinner size="sm" />
+                      {label('settings_update_checking')}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{label('settings_up_to_date')}</span>
+                  )}
+                </div>
+
+                {isInstalling && installProgress?.stage === 'error' && (
+                  <div className="text-xs text-destructive">{installProgress.message}</div>
+                )}
+
+                {!isInstalling && (hasUpdate ? (
                   <button
-                    type="button"
-                    role="switch"
-                    aria-checked={currentAutoExtract}
-                    onClick={handleAutoExtractToggle}
-                    className={cn(
-                      "relative w-9 h-5 rounded-full transition-colors flex items-center px-0.5 cursor-pointer",
-                      currentAutoExtract ? "bg-primary" : "bg-muted-foreground/40"
-                    )}
+                    onClick={handleInstallUpdate}
+                    className="w-full py-1.5 bg-semantic-orange hover:bg-semantic-orange/90 text-white text-xs font-medium rounded transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span
-                      className={cn(
-                        "w-3.5 h-3.5 bg-white rounded-full shadow transition-transform",
-                        currentAutoExtract && "translate-x-[18px]"
-                      )}
-                    />
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    {label('settings_update_install', availableRelease!.tagName)}
                   </button>
+                ) : (
+                  <button
+                    onClick={() => checkUpdate()}
+                    disabled={isCheckingUpdate || isOffline}
+                    className="w-full py-1.5 bg-secondary hover:bg-secondary/80 text-secondary-foreground text-xs font-medium rounded transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-secondary"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                      <path d="M21 3v5h-5" />
+                      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                      <path d="M8 16H3v5" />
+                    </svg>
+                    {label('settings_update_check')}
+                  </button>
+                ))}
+
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-semantic-orange">{label('settings_auto_update')}</div>
+                  <Switch checked={currentAutoUpdate} onCheckedChange={handleAutoUpdateToggle} variant="orange" />
+                </div>
+              </div>
+
+              <div className="p-3 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-destructive">{label('settings_verbose_logging')}</span>
+                    <span
+                      title={label('settings_verbose_logging_tooltip')}
+                      className="text-destructive/80 hover:text-destructive transition-colors cursor-help"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </span>
+                  </div>
+                  <Switch checked={currentVerboseLogging} onCheckedChange={handleVerboseLoggingToggle} variant="destructive" />
                 </div>
               </div>
 
@@ -489,6 +598,33 @@ export function SettingsPanel() {
         title={label('welcome_browse_btn')}
       />
     </div>
+  );
+}
+
+function Switch({ checked, onCheckedChange, variant = 'default' }: { checked: boolean; onCheckedChange: () => void; variant?: 'default' | 'destructive' | 'gold' | 'blue' | 'orange' }) {
+  const checkedBg = variant === 'destructive' ? "bg-destructive"
+    : variant === 'gold' ? "bg-semantic-gold"
+    : variant === 'blue' ? "bg-semantic-blue"
+    : variant === 'orange' ? "bg-semantic-orange"
+    : "bg-primary";
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onCheckedChange}
+      className={cn(
+        "relative w-9 h-5 rounded-full transition-colors flex items-center px-0.5 cursor-pointer flex-shrink-0",
+        checked ? checkedBg : "bg-muted-foreground/40"
+      )}
+    >
+      <span
+        className={cn(
+          "w-3.5 h-3.5 bg-white rounded-full shadow transition-transform",
+          checked && "translate-x-[18px]"
+        )}
+      />
+    </button>
   );
 }
 

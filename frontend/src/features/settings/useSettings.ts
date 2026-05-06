@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { settingsApi, gameApi } from '@/api/client';
-import type { UpdateSettingsRequest } from '@/api/types';
+import type { UpdateSettingsRequest, ReleaseInfo } from '@/api/types';
 
 export function useSettings() {
   const query = useQuery({
@@ -75,6 +75,55 @@ export function useUpdateSettings() {
         }
       }
     },
+  });
+}
+
+export function useCheckUpdate() {
+  return useQuery({
+    queryKey: ['check-update'],
+    queryFn: () => settingsApi.checkUpdate(),
+    enabled: false,
+    staleTime: 300_000,
+    retry: false,
+  });
+}
+
+const AUTO_UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
+export function useAutoUpdateChecker() {
+  const { data: settings } = useSettings();
+  const queryClient = useQueryClient();
+  const enabled = settings?.autoUpdateEnabled ?? false;
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const trigger = () => {
+      queryClient.fetchQuery({
+        queryKey: ['check-update'],
+        queryFn: () => settingsApi.checkUpdate(),
+        retry: false,
+      }).catch(() => {});
+    };
+
+    trigger();
+    const interval = setInterval(trigger, AUTO_UPDATE_CHECK_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [enabled, queryClient]);
+}
+
+export function useInstallUpdate() {
+  return useMutation({
+    mutationFn: (release: ReleaseInfo) => settingsApi.installUpdate(release),
+  });
+}
+
+export function useUpdateProgress(enabled: boolean) {
+  return useQuery({
+    queryKey: ['update-progress'],
+    queryFn: () => settingsApi.getUpdateProgress(),
+    enabled,
+    refetchInterval: 1000,
   });
 }
 

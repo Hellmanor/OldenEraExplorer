@@ -32,6 +32,8 @@ import type {
   SearchResponse,
   SettingsDto,
   UpdateSettingsRequest,
+  ReleaseInfo,
+  UpdateProgress,
   LocalesDto,
   LabelsDto,
 } from './types';
@@ -65,6 +67,13 @@ function handleApiError(error: unknown): never {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<ErrorDto>;
     const message = axiosError.response?.data?.error || axiosError.message;
+    const method = (axiosError.config?.method ?? 'GET').toUpperCase();
+    const path = axiosError.config?.url ?? '(unknown)';
+    const status = axiosError.response?.status ?? 0;
+    const body = axiosError.response?.data;
+    // Dev console mirror so non-OK API responses surface where developers look first.
+    // The thrown error still flows through React Query / mutations as before.
+    console.error('[OldenEraExplorer] API error:', method, path, status, body ?? message);
     throw new Error(message);
   }
   throw error;
@@ -482,6 +491,14 @@ export const extractionApi = {
     }
   },
 
+  dismiss: async (): Promise<void> => {
+    try {
+      await api.post('/extraction/dismiss');
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+
   getStatus: async (): Promise<{
     status: string;
     progress: {
@@ -557,6 +574,32 @@ export const settingsApi = {
   getLocales: async (): Promise<LocalesDto> => {
     try {
       const response = await api.get<LocalesDto>('/settings/locales');
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+
+  checkUpdate: async (): Promise<ReleaseInfo | null> => {
+    try {
+      const response = await api.get<ReleaseInfo | null>('/settings/check-update');
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+
+  installUpdate: async (release: ReleaseInfo): Promise<void> => {
+    try {
+      await api.post('/settings/install-update', release);
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+
+  getUpdateProgress: async (): Promise<UpdateProgress | null> => {
+    try {
+      const response = await api.get<UpdateProgress | null>('/settings/update-progress');
       return response.data;
     } catch (error) {
       handleApiError(error);

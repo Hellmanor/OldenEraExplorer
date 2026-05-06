@@ -1,6 +1,7 @@
 using GameData.Loading;
 using Localization.Services;
 using API.Contracts;
+using API.Hosting;
 using API.Services;
 
 namespace API.Endpoints;
@@ -34,6 +35,46 @@ public static class SettingsEndpoints
             .WithDescription("Returns a list of all available game locales found in the StreamingAssets/Lang directory.")
             .Produces<LocalesDto>(200);
 
+        // GET /api/settings/check-update
+        group.MapGet("/check-update", async (UpdateService updateService) =>
+        {
+            try
+            {
+                var release = await updateService.CheckForUpdatesAsync();
+                return Results.Ok(release);
+            }
+            catch (HttpRequestException)
+            {
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+            catch (TaskCanceledException)
+            {
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+        })
+        .WithName("CheckUpdate")
+        .WithSummary("Check for a newer release on GitHub")
+        .Produces<ReleaseInfo?>(200);
+
+        // POST /api/settings/install-update
+        group.MapPost("/install-update", (ReleaseInfo release, UpdateService updateService) =>
+        {
+            _ = Task.Run(() => updateService.DownloadAndInstallUpdateAsync(release));
+            return Results.Accepted();
+        })
+        .WithName("InstallUpdate")
+        .WithSummary("Download and install a release, then restart")
+        .Produces(202);
+
+        // GET /api/settings/update-progress
+        group.MapGet("/update-progress", () =>
+        {
+            return Results.Ok(UpdateService.InstallProgress);
+        })
+        .WithName("GetUpdateProgress")
+        .WithSummary("Poll installation progress")
+        .Produces<UpdateProgress?>(200);
+
         return endpoints;
     }
 
@@ -43,10 +84,14 @@ public static class SettingsEndpoints
             Theme: settings.ThemeVariant,
             Locale: settings.LastLocale,
             UsePlaceholderResolver: settings.PlaceholderResolverEnabled,
-            ShowResolverOutput: false, // This was not in the original SettingsService, always false for now
+            ShowResolverOutput: false,
             AutoExtractEnabled: settings.AutoExtractEnabled,
             ExtractPng: settings.ExtractPng,
-            ExtractGlb: settings.ExtractGlb
+            ExtractGlb: settings.ExtractGlb,
+            MinimizeToTray: settings.MinimizeToTray,
+            AutoUpdateEnabled: settings.AutoUpdateEnabled,
+            VerboseLogging: settings.VerboseLogging,
+            Version: UpdateService.CurrentVersion
         );
 
         return Results.Ok(dto);
@@ -55,9 +100,11 @@ public static class SettingsEndpoints
     private static IResult UpdateSettings(
         UpdateSettingsRequest request,
         SettingsService settings,
+        TrayIconService trayIconService,
         IGamePathService pathService,
         IGameDataService dataService,
-        IDataCatalog dataCatalog)
+        IDataCatalog dataCatalog,
+        DiagnosticFileLogger diagnosticLogger)
     {
         bool localeChanged = false;
         bool resolverChanged = false;
@@ -114,6 +161,27 @@ public static class SettingsEndpoints
             settings.ExtractGlb = request.ExtractGlb.Value;
         }
 
+        // Update minimize to tray if provided
+        if (request.MinimizeToTray.HasValue && settings.MinimizeToTray != request.MinimizeToTray.Value)
+        {
+            settings.MinimizeToTray = request.MinimizeToTray.Value;
+            if (settings.MinimizeToTray)
+                trayIconService.ShowIcon();
+            else
+                trayIconService.HideIcon();
+        }
+
+        if (request.AutoUpdateEnabled.HasValue)
+        {
+            settings.AutoUpdateEnabled = request.AutoUpdateEnabled.Value;
+        }
+
+        if (request.VerboseLogging.HasValue && settings.VerboseLogging != request.VerboseLogging.Value)
+        {
+            settings.VerboseLogging = request.VerboseLogging.Value;
+            diagnosticLogger.SetVerbose(settings.VerboseLogging);
+        }
+
         // Save settings to disk
         settings.Save();
 
@@ -139,7 +207,11 @@ public static class SettingsEndpoints
             ShowResolverOutput: false,
             AutoExtractEnabled: settings.AutoExtractEnabled,
             ExtractPng: settings.ExtractPng,
-            ExtractGlb: settings.ExtractGlb
+            ExtractGlb: settings.ExtractGlb,
+            MinimizeToTray: settings.MinimizeToTray,
+            AutoUpdateEnabled: settings.AutoUpdateEnabled,
+            VerboseLogging: settings.VerboseLogging,
+            Version: UpdateService.CurrentVersion
         );
 
         return Results.Ok(dto);
@@ -191,6 +263,10 @@ public static class SettingsEndpoints
 /// <param name="AutoExtractEnabled">Whether to automatically extract assets after setting game path.</param>
 /// <param name="ExtractPng">Whether to extract PNG icons during auto-extraction.</param>
 /// <param name="ExtractGlb">Whether to extract GLB models during auto-extraction.</param>
+/// <param name="MinimizeToTray">Whether to keep the app running in the system tray after all browser tabs are closed.</param>
+/// <param name="AutoUpdateEnabled">Whether to automatically install updates on next launch.</param>
+/// <param name="VerboseLogging">Whether to write a full diagnostic log file from app start. For bug reproduction only.</param>
+/// <param name="Version">Current application version.</param>
 public record SettingsDto(
     string Theme,
     string Locale,
@@ -198,7 +274,11 @@ public record SettingsDto(
     bool ShowResolverOutput,
     bool AutoExtractEnabled,
     bool ExtractPng,
-    bool ExtractGlb
+    bool ExtractGlb,
+    bool MinimizeToTray,
+    bool AutoUpdateEnabled,
+    bool VerboseLogging,
+    string Version
 );
 
 /// <param name="Theme">Optional: Theme variant to set.</param>
@@ -208,6 +288,9 @@ public record SettingsDto(
 /// <param name="AutoExtractEnabled">Optional: Whether to enable auto-extract after path set.</param>
 /// <param name="ExtractPng">Optional: Whether to extract PNG icons.</param>
 /// <param name="ExtractGlb">Optional: Whether to extract GLB models.</param>
+/// <param name="MinimizeToTray">Optional: Whether to minimize to tray on tab close.</param>
+/// <param name="AutoUpdateEnabled">Optional: Whether to enable automatic updates.</param>
+/// <param name="VerboseLogging">Optional: Whether to enable verbose diagnostic file logging.</param>
 public record UpdateSettingsRequest(
     string? Theme = null,
     string? Locale = null,
@@ -215,7 +298,10 @@ public record UpdateSettingsRequest(
     bool? ShowResolverOutput = null,
     bool? AutoExtractEnabled = null,
     bool? ExtractPng = null,
-    bool? ExtractGlb = null
+    bool? ExtractGlb = null,
+    bool? MinimizeToTray = null,
+    bool? AutoUpdateEnabled = null,
+    bool? VerboseLogging = null
 );
 
 /// <param name="Locales">List of available locale codes.</param>
