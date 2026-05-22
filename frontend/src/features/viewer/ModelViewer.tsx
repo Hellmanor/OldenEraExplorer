@@ -1,4 +1,4 @@
-import {
+﻿import {
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -45,6 +45,7 @@ interface ModelViewerProps {
   statsContainer?: HTMLElement | null;
   unitScale?: number | null;
   faction?: string | null;
+  customTextureUrl?: string | null;
 }
 
 class ThreeViewer {
@@ -61,8 +62,8 @@ class ThreeViewer {
   private content: THREE.Group | null = null;
   private platformGroup: THREE.Group | null = null;
   private platformScene: THREE.Group | null = null;
-  private platformSize: THREE.Vector3 | null = null; // Cached for resetCamera in game-preview
-  private platformInitialCenter: THREE.Vector3 | null = null; // Cached platform center for consistent positioning
+  private platformSize: THREE.Vector3 | null = null; 
+  private platformInitialCenter: THREE.Vector3 | null = null; 
   private defaultCameraTarget: THREE.Vector3 | null = null;
   private defaultCameraDistance: number = 5;
   private mixer: THREE.AnimationMixer | null = null;
@@ -89,7 +90,18 @@ class ThreeViewer {
   private skyBackgroundPosition = 'center center';
 
   private materialRegistry: Map<string, THREE.Material> = new Map();
-  private backgroundColor = new THREE.Color('#191919');
+  private customTextures: THREE.Texture[] = [];
+  private customTextureLoadVersion = 0;
+  private originalMaterialStates: Map<
+    string,
+    {
+      map: THREE.Texture | null;
+      alphaTest: number;
+      transparent: boolean;
+      depthWrite: boolean;
+      side: THREE.Side;
+    }
+  > = new Map();  private backgroundColor = new THREE.Color('#191919');
 
   constructor(container: HTMLElement, statsContainer?: HTMLElement | null) {
     this.container = container;
@@ -112,7 +124,7 @@ class ThreeViewer {
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.toneMapping = THREE.LinearToneMapping;
     this.renderer.toneMappingExposure = 1;
-    // Critical: Set output color space for correct sRGB display (Three.js r152+)
+    
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
 
@@ -234,13 +246,12 @@ class ThreeViewer {
 
     modelScene.updateMatrixWorld(true);
 
-    // Setup animation mixer FIRST so we can tick it before computing bounding box
-    // This ensures skinned meshes are in their idle pose, not bind pose
+    
     let animationStates: AnimationState[] = [];
     if (clips.length > 0) {
       this.mixer = new THREE.AnimationMixer(modelScene);
 
-      // Find default animation (prefer "idle")
+      
       const lowerNames = clips.map((clip) => clip.name.toLowerCase());
       let defaultIndex = lowerNames.findIndex((name) => name === 'idle');
       if (defaultIndex < 0) {
@@ -252,10 +263,10 @@ class ThreeViewer {
         defaultIndex = lowerNames.findIndex((name) => name.includes('idle'));
       }
       if (defaultIndex < 0) {
-        defaultIndex = 0; // Fallback to first clip
+        defaultIndex = 0; 
       }
 
-      // Create animation states
+      
       animationStates = clips.map((clip, index) => ({
         name: clip.name,
         clip: clip.uuid,
@@ -264,7 +275,7 @@ class ThreeViewer {
         duration: clip.duration,
       }));
 
-      // Setup actions
+      
       clips.forEach((clip, index) => {
         const action = this.mixer!.clipAction(clip);
         this.actions.set(clip.name, action);
@@ -274,7 +285,7 @@ class ThreeViewer {
         }
       });
 
-      // Tick the mixer to apply the idle animation pose before computing bounding box
+      
       this.mixer.update(0);
       modelScene.updateMatrixWorld(true);
     }
@@ -388,12 +399,151 @@ class ThreeViewer {
 
     return node;
   }
+  private hasTextureMap(
+    material: THREE.Material
+  ): material is THREE.Material & { map: THREE.Texture | null } {
+    return 'map' in material;
+  }
+
+  private saveOriginalMaterialState(material: THREE.Material) {
+    if (this.originalMaterialStates.has(material.uuid)) {
+      return;
+    }
+
+    this.originalMaterialStates.set(material.uuid, {
+      map: this.hasTextureMap(material) ? material.map ?? null : null,
+      alphaTest: material.alphaTest,
+      transparent: material.transparent,
+      depthWrite: material.depthWrite,
+      side: material.side,
+    });
+  }
+
+  private configureUploadedDiffuseTexture(
+    texture: THREE.Texture,
+    originalMap: THREE.Texture
+  ) {
+    
+    
+    texture.colorSpace = originalMap.colorSpace || THREE.SRGBColorSpace;
+
+    
+    texture.flipY = true;
+
+    texture.wrapS = originalMap.wrapS;
+    texture.wrapT = originalMap.wrapT;
+
+    texture.offset.copy(originalMap.offset);
+    texture.repeat.copy(originalMap.repeat);
+    texture.center.copy(originalMap.center);
+    texture.rotation = originalMap.rotation;
+
+    texture.matrixAutoUpdate = originalMap.matrixAutoUpdate;
+    if (!originalMap.matrixAutoUpdate) {
+      texture.matrix.copy(originalMap.matrix);
+    }
+
+    texture.generateMipmaps = originalMap.generateMipmaps;
+    texture.minFilter = originalMap.minFilter;
+    texture.magFilter = originalMap.magFilter;
+    texture.anisotropy = originalMap.anisotropy;
+
+    texture.needsUpdate = true;
+  }
+
+  private restoreOriginalMaterialStates() {
+    this.materialRegistry.forEach((material) => {
+      const state = this.originalMaterialStates.get(material.uuid);
+
+      if (!state) {
+        return;
+      }
+
+      if (this.hasTextureMap(material)) {
+        material.map = state.map;
+      }
+
+      material.alphaTest = state.alphaTest;
+      material.transparent = state.transparent;
+      material.depthWrite = state.depthWrite;
+      material.side = state.side;
+      material.needsUpdate = true;
+    });
+
+    this.originalMaterialStates.clear();
+  }
+
+  private disposeCustomTextures() {
+    this.customTextures.forEach((texture) => texture.dispose());
+    this.customTextures = [];
+  }
+
+  async setCustomTextureUrl(url: string | null) {
+    const version = ++this.customTextureLoadVersion;
+
+    if (!url) {
+      this.restoreOriginalMaterialStates();
+      this.disposeCustomTextures();
+      return;
+    }
+
+    const loader = new THREE.TextureLoader();
+    const uploadedTexture = await loader.loadAsync(url);
+
+    if (this.disposed || version !== this.customTextureLoadVersion) {
+      uploadedTexture.dispose();
+      return;
+    }
+
+    const texturesInUse: THREE.Texture[] = [];
+    let firstTextureAssigned = false;
+
+    this.materialRegistry.forEach((material) => {
+      if (!this.hasTextureMap(material)) {
+        return;
+      }
+
+      const originalMap = material.map;
+
+      
+      if (!originalMap) {
+        return;
+      }
+
+      this.saveOriginalMaterialState(material);
+
+      const textureForMaterial = firstTextureAssigned
+        ? uploadedTexture.clone()
+        : uploadedTexture;
+
+      firstTextureAssigned = true;
+
+      this.configureUploadedDiffuseTexture(textureForMaterial, originalMap);
+
+      material.map = textureForMaterial;
+      material.needsUpdate = true;
+
+      texturesInUse.push(textureForMaterial);
+    });
+
+    this.disposeCustomTextures();
+
+    if (texturesInUse.length === 0) {
+      uploadedTexture.dispose();
+      return;
+    }
+
+    this.customTextures = texturesInUse;
+  }
 
   private clear() {
+    this.restoreOriginalMaterialStates();
+    this.disposeCustomTextures();
+
     if (this.content) {
       this.scene.remove(this.content);
 
-      // Dispose geometry and materials
+      
       this.content.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
           if (obj.geometry) {
@@ -402,7 +552,7 @@ class ThreeViewer {
           const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
           materials.forEach((mat) => {
             if (mat) {
-              // Dispose textures
+              
               const textureProps = [
                 'map', 'lightMap', 'bumpMap', 'normalMap', 'specularMap',
                 'envMap', 'alphaMap', 'aoMap', 'displacementMap',
@@ -425,17 +575,17 @@ class ThreeViewer {
       this.content = null;
     }
 
-    // Clear mixer
+    
     if (this.mixer) {
       this.mixer.stopAllAction();
       this.mixer = null;
     }
     this.actions.clear();
 
-    // Clear material registry
+    
     this.materialRegistry.clear();
 
-    // Clear platform
+    
     if (this.platformScene) {
       this.platformGroup?.remove(this.platformScene);
       this.platformScene = null;
@@ -444,14 +594,16 @@ class ThreeViewer {
     this.defaultCameraTarget = null;
     this.defaultCameraDistance = 5;
 
-    // Clear Phase 2 helpers
+    
     this.clearHelpers();
   }
 
-  // Clear only the model content, keeping the platform intact
-  // Used when switching models in Game Preview mode
+  
   private clearModel() {
-    // Dispose of content but keep platform
+    this.restoreOriginalMaterialStates();
+    this.disposeCustomTextures();
+
+    
     if (this.content) {
       this.scene.remove(this.content);
       this.content.traverse((node) => {
@@ -473,30 +625,27 @@ class ThreeViewer {
       this.content = null;
     }
 
-    // Clear mixer
+    
     if (this.mixer) {
       this.mixer.stopAllAction();
       this.mixer = null;
     }
     this.actions.clear();
 
-    // Clear material registry
+    
     this.materialRegistry.clear();
 
-    // Keep platform! Don't clear platformScene, platformSize
-
-    // Clear Phase 2 helpers
+    
     this.clearHelpers();
   }
 
-  // Animation control methods
-  // Simplified to match donmccurdy viewer approach: play() / stop()
+  
   syncAnimations(storeAnimations: AnimationState[], loopMode: 'once' | 'repeat' | 'pingpong') {
     storeAnimations.forEach((anim) => {
       const action = this.actions.get(anim.name);
       if (!action) return;
 
-      // Apply loop mode
+      
       switch (loopMode) {
         case 'once':
           action.setLoop(THREE.LoopOnce, 1);
@@ -512,7 +661,7 @@ class ThreeViewer {
           break;
       }
 
-      // Simple play/stop like donmccurdy viewer
+      
       action.setEffectiveTimeScale(1);
       if (anim.playing) {
         action.play();
@@ -520,7 +669,7 @@ class ThreeViewer {
         action.stop();
       }
 
-      // Seek support
+      
       if (anim.playing && Number.isFinite(anim.time) && anim.duration > 0) {
         const clampedTime = Math.max(0, Math.min(anim.time, anim.duration));
         if (Math.abs(action.time - clampedTime) > 1e-3) {
@@ -534,13 +683,13 @@ class ThreeViewer {
     if (this.mixer) {
       this.mixer.timeScale = speed;
     }
-    // Also apply to platform animations
+    
     if (this.platformMixer) {
       this.platformMixer.timeScale = speed;
     }
   }
 
-  // Apply loop mode to platform animations (all platform animations are always playing)
+  
   syncPlatformAnimations(loopMode: 'once' | 'repeat' | 'pingpong') {
     this.platformActions.forEach((action) => {
       switch (loopMode) {
@@ -560,13 +709,7 @@ class ThreeViewer {
     });
   }
 
-  // Display settings
-  // Studio mode (donmccurdy style):
-  // - Checkbox OFF (show=false): backgroundColor
-  // - Checkbox ON (show=true): environment map as visible background
-  // Game-preview mode:
-  // - Checkbox OFF (show=false): unit_info_back.png (gameBackground)
-  // - Checkbox ON (show=true): Cold Sunset Equirect.png (gameEnvironment)
+  
   setBackground(show: boolean, color: string, displayMode: 'studio' | 'game-preview') {
     this.backgroundColor.set(color);
 
@@ -575,11 +718,11 @@ class ThreeViewer {
       this.scene.background = show ? this.neutralEnvironment : this.backgroundColor;
     } else {
       if (show) {
-        // Show equirect skybox (Cold Sunset)
+        
         this.renderer.setClearAlpha(1);
         this.scene.background = this.gameEnvironment ?? this.backgroundColor;
       } else {
-        // CSS sky background handles the visual; canvas renders transparently on top
+        
         this.renderer.setClearAlpha(0);
         this.scene.background = null;
       }
@@ -620,18 +763,18 @@ class ThreeViewer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, limit));
   }
 
-  // Lights
+  
   updateLights(
     usePunctual: boolean,
     ambientIntensity: number,
     ambientColor: string,
     directionalIntensity: number,
     directionalColor: string,
-    // Spherical angles from unit_hire_preview_lighting.asset
+    
     zenithDeg = 59.5,
     azimuthDeg = 322
   ) {
-    // Remove existing lights
+    
     this.lights.forEach((light) => {
       light.parent?.remove(light);
     });
@@ -657,13 +800,13 @@ class ThreeViewer {
     this.lights.push(directional);
   }
 
-  // Update grid size based on current camera distance
+  
   private updateGridSize() {
     if (!this.gridHelper) return;
 
     const gridSize = this.defaultCameraDistance * 3;
 
-    // Recreate grid with new size
+    
     this.scene.remove(this.gridHelper);
     this.gridHelper.geometry.dispose();
     (this.gridHelper.material as THREE.Material).dispose();
@@ -674,7 +817,7 @@ class ThreeViewer {
     (this.gridHelper.material as THREE.Material).polygonOffsetUnits = 1;
     this.scene.add(this.gridHelper);
 
-    // Recreate axes with length proportional to camera distance
+    
     if (this.axesHelper) {
       this.scene.remove(this.axesHelper);
       this.axesHelper.traverse((child) => {
@@ -714,28 +857,28 @@ class ThreeViewer {
     }
   }
 
-  // Toggle grid and axes helpers
+  
   setGrid(show: boolean) {
     if (show && !this.gridHelper) {
-      // Scale grid size based on camera distance for consistent visual appearance
+      
       const gridSize = this.defaultCameraDistance * 3;
 
-      // Create grid with calculated size
+      
       this.gridHelper = new THREE.GridHelper(gridSize, 10);
-      // Push grid back in depth buffer to avoid z-fighting with axes
+      
       (this.gridHelper.material as THREE.Material).polygonOffset = true;
       (this.gridHelper.material as THREE.Material).polygonOffsetFactor = 1;
       (this.gridHelper.material as THREE.Material).polygonOffsetUnits = 1;
       this.scene.add(this.gridHelper);
 
-      // Create thick axes using Line2 (works on all platforms, unlike linewidth)
+      
       this.axesHelper = new THREE.Group();
-      this.axesHelper.renderOrder = 1; // Render after grid
+      this.axesHelper.renderOrder = 1; 
 
       const axisLength = this.defaultCameraDistance * 0.5;
       const lineWidth = 5;
 
-      // X axis (red)
+      
       const xGeom = new LineGeometry();
       xGeom.setPositions([0, 0, 0, axisLength, 0, 0]);
       const xMat = new LineMaterial({
@@ -750,7 +893,7 @@ class ThreeViewer {
       xLine.computeLineDistances();
       this.axesHelper.add(xLine);
 
-      // Y axis (green)
+      
       const yGeom = new LineGeometry();
       yGeom.setPositions([0, 0, 0, 0, axisLength, 0]);
       const yMat = new LineMaterial({
@@ -765,7 +908,7 @@ class ThreeViewer {
       yLine.computeLineDistances();
       this.axesHelper.add(yLine);
 
-      // Z axis (blue)
+      
       const zGeom = new LineGeometry();
       zGeom.setPositions([0, 0, 0, 0, 0, axisLength]);
       const zMat = new LineMaterial({
@@ -782,16 +925,16 @@ class ThreeViewer {
 
       this.scene.add(this.axesHelper);
     } else if (!show && this.gridHelper) {
-      // Remove grid
+      
       this.scene.remove(this.gridHelper);
       this.gridHelper.geometry.dispose();
       (this.gridHelper.material as THREE.Material).dispose();
       this.gridHelper = null;
 
-      // Remove axes
+      
       if (this.axesHelper) {
         this.scene.remove(this.axesHelper);
-        // Dispose Line2 children
+        
         this.axesHelper.traverse((child) => {
           if (child instanceof Line2) {
             child.geometry.dispose();
@@ -804,7 +947,7 @@ class ThreeViewer {
   }
 
   setSkeleton(show: boolean) {
-    // Remove existing helper
+    
     if (this.skeletonHelper) {
       this.scene.remove(this.skeletonHelper);
       this.skeletonHelper.geometry.dispose();
@@ -814,7 +957,7 @@ class ThreeViewer {
 
     if (!show) return;
 
-    // Find skinned mesh in model and platform
+    
     const skinnedMeshes: THREE.SkinnedMesh[] = [];
     if (this.content) {
       this.content.traverse((child) => {
@@ -834,7 +977,7 @@ class ThreeViewer {
     const skinnedMesh = skinnedMeshes[0];
     if (!skinnedMesh || !skinnedMesh.skeleton) return;
 
-    // Find root bone
+    
     let rootBone: THREE.Bone | null = null;
     for (const bone of skinnedMesh.skeleton.bones) {
       if (!bone.parent || !(bone.parent instanceof THREE.Bone)) {
@@ -866,21 +1009,21 @@ class ThreeViewer {
     }
   }
 
-  // Controls settings
+  
   setAutoRotate(enabled: boolean, speed: number) {
     this.controls.autoRotate = enabled;
     this.controls.autoRotateSpeed = speed;
   }
 
-  // Set orbit mode: 'turntable' locks vertical rotation (Y axis only), 'free' allows full orbit
+  
   setOrbitMode(mode: 'turntable' | 'free') {
     if (mode === 'turntable') {
-      // Lock polar angle to current value (no up/down rotation)
+      
       const currentPolar = this.controls.getPolarAngle();
       this.controls.minPolarAngle = currentPolar;
       this.controls.maxPolarAngle = currentPolar;
     } else {
-      // Free orbit - allow full vertical rotation
+      
       this.controls.minPolarAngle = 0;
       this.controls.maxPolarAngle = Math.PI;
     }
@@ -892,13 +1035,13 @@ class ThreeViewer {
     this.camera.updateProjectionMatrix();
   }
 
-  // Material updates
+  
   updateMaterials(
     materials: MaterialInfo[],
     globalWireframe: boolean,
     pointSize: number
   ) {
-    // Update model materials from registry
+    
     this.materialRegistry.forEach((material, uuid) => {
       const info = materials.find((m) => m.uuid === uuid);
       if (!info) return;
@@ -928,7 +1071,7 @@ class ThreeViewer {
       }
     });
 
-    // Apply wireframe to platform materials
+    
     if (this.platformScene) {
       this.platformScene.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
@@ -943,9 +1086,9 @@ class ThreeViewer {
     }
   }
 
-  // Visibility
+  
   updateVisibility(hiddenNodes: Set<string>, soloNode: string | null) {
-    // Apply hidden nodes helper
+    
     const applyHidden = (object: THREE.Object3D, parentHidden: boolean) => {
       const isHidden = parentHidden || hiddenNodes.has(object.uuid);
       object.visible = !isHidden;
@@ -953,7 +1096,7 @@ class ThreeViewer {
     };
 
     if (soloNode) {
-      // Hide everything first
+      
       if (this.content) {
         this.content.traverse((obj) => {
           obj.visible = false;
@@ -965,7 +1108,7 @@ class ThreeViewer {
         });
       }
 
-      // Show solo object and ancestors/descendants (check both model and platform)
+      
       const soloObject = this.content?.getObjectByProperty('uuid', soloNode)
         || this.platformScene?.getObjectByProperty('uuid', soloNode);
       if (soloObject) {
@@ -981,22 +1124,20 @@ class ThreeViewer {
       return;
     }
 
-    // Apply hidden nodes to model
+    
     if (this.content) {
       applyHidden(this.content, false);
     }
 
-    // Apply hidden nodes to platform (independent of platformGroup visibility)
+    
     if (this.platformScene) {
       applyHidden(this.platformScene, false);
     }
   }
 
-  // Phase 2: BoundingBox and BoneWireframe Helpers
-
-  // Sync bounding box helpers with the set of node UUIDs from the store
+  
   syncBoundingBoxHelpers(nodeUuids: Set<string>) {
-    // Remove helpers for nodes no longer in the set
+    
     this.boundingBoxHelpers.forEach((helper, uuid) => {
       if (!nodeUuids.has(uuid)) {
         this.scene.remove(helper);
@@ -1006,7 +1147,7 @@ class ThreeViewer {
       }
     });
 
-    // Remove bone bounding box helpers for nodes no longer in the set
+    
     this.boneBoundingBoxHelpers.forEach((entry, uuid) => {
       if (!nodeUuids.has(uuid)) {
         this.scene.remove(entry.helper);
@@ -1016,21 +1157,21 @@ class ThreeViewer {
       }
     });
 
-    // Add helpers for new nodes
+    
     nodeUuids.forEach((uuid) => {
       if (this.boundingBoxHelpers.has(uuid) || this.boneBoundingBoxHelpers.has(uuid)) {
-        return; // Already have a helper for this node
+        return; 
       }
 
-      // Find the target object
+      
       const target = this.findObjectByUuid(uuid);
       if (!target) return;
 
-      // Check if it's a Bone - use BoneBoundingBoxHelper
+      
       if (target instanceof THREE.Bone) {
         this.createBoneBoundingBoxHelper(uuid, target);
       } else {
-        // Regular object - use BoxHelper
+        
         const helper = new THREE.BoxHelper(target, '#ffff00');
         this.scene.add(helper);
         this.boundingBoxHelpers.set(uuid, helper);
@@ -1038,7 +1179,7 @@ class ThreeViewer {
     });
   }
 
-  // Find an object by UUID in model and platform scenes
+  
   private findObjectByUuid(uuid: string): THREE.Object3D | null {
     if (this.content) {
       const found = this.content.getObjectByProperty('uuid', uuid);
@@ -1051,18 +1192,18 @@ class ThreeViewer {
     return null;
   }
 
-  // Create a BoneBoundingBoxHelper for a bone
+  
   private createBoneBoundingBoxHelper(uuid: string, bone: THREE.Bone) {
     const searchScene = this.content || this.scene;
 
-    // Find the SkinnedMesh that uses this bone
+    
     const skinnedMesh = this.findSkinnedMeshForBone(searchScene, bone);
     if (!skinnedMesh || !skinnedMesh.skeleton) return;
 
-    // Collect bone indices (this bone + descendants)
+    
     const boneIndices = this.collectBoneIndices(bone, skinnedMesh.skeleton);
 
-    // Find influenced vertices
+    
     const vertexIndices = this.findInfluencedVertices(skinnedMesh, boneIndices);
     if (vertexIndices.length === 0) return;
 
@@ -1072,7 +1213,7 @@ class ThreeViewer {
       boneIndices,
     };
 
-    // Create box wireframe
+    
     const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
     const edgesGeometry = new THREE.EdgesGeometry(boxGeometry);
     const material = new THREE.LineBasicMaterial({ color: '#00ffff' });
@@ -1083,7 +1224,7 @@ class ThreeViewer {
     this.boneBoundingBoxHelpers.set(uuid, { helper, mapping });
   }
 
-  // Update bone bounding box helpers (called in animate loop)
+  
   private updateBoneBoundingBoxHelpers() {
     const box = new THREE.Box3();
     const positionVec = new THREE.Vector3();
@@ -1091,10 +1232,10 @@ class ThreeViewer {
     this.boneBoundingBoxHelpers.forEach(({ helper, mapping }) => {
       const { skinnedMesh, vertexIndices } = mapping;
 
-      // Reset box
+      
       box.makeEmpty();
 
-      // Compute bounding box from influenced vertices (in world space)
+      
       for (const idx of vertexIndices) {
         skinnedMesh.getVertexPosition(idx, positionVec);
         positionVec.applyMatrix4(skinnedMesh.matrixWorld);
@@ -1103,7 +1244,7 @@ class ThreeViewer {
 
       if (box.isEmpty()) return;
 
-      // Update helper transform
+      
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
 
@@ -1112,9 +1253,9 @@ class ThreeViewer {
     });
   }
 
-  // Sync bone wireframe helpers with the set of node UUIDs from the store
+  
   syncWireframeHelpers(nodeUuids: Set<string>) {
-    // Remove helpers for nodes no longer in the set
+    
     this.boneWireframeHelpers.forEach((entry, uuid) => {
       if (!nodeUuids.has(uuid)) {
         this.scene.remove(entry.helper);
@@ -1124,7 +1265,7 @@ class ThreeViewer {
       }
     });
 
-    // Add helpers for new nodes (only for Bones)
+    
     nodeUuids.forEach((uuid) => {
       if (this.boneWireframeHelpers.has(uuid)) return;
 
@@ -1135,22 +1276,22 @@ class ThreeViewer {
     });
   }
 
-  // Create a BoneWireframeHelper for a bone
+  
   private createBoneWireframeHelper(uuid: string, bone: THREE.Bone) {
     const searchScene = this.content || this.scene;
 
-    // Find the SkinnedMesh that uses this bone
+    
     const skinnedMesh = this.findSkinnedMeshForBone(searchScene, bone);
     if (!skinnedMesh || !skinnedMesh.skeleton) return;
 
-    // Collect bone indices
+    
     const boneIndices = this.collectBoneIndices(bone, skinnedMesh.skeleton);
 
-    // Find influenced vertices
+    
     const vertexIndices = this.findInfluencedVerticesSet(skinnedMesh, boneIndices);
     if (vertexIndices.size === 0) return;
 
-    // Find influenced triangles
+    
     const triangleIndices = this.findInfluencedTriangles(skinnedMesh.geometry, vertexIndices);
     if (triangleIndices.length === 0) return;
 
@@ -1160,7 +1301,7 @@ class ThreeViewer {
       vertexIndices,
     };
 
-    // Each triangle has 3 edges, each edge has 2 points, each point has 3 components
+    
     const edgeCount = triangleIndices.length * 3;
     const positions = new Float32Array(edgeCount * 2 * 3);
 
@@ -1182,7 +1323,7 @@ class ThreeViewer {
     this.boneWireframeHelpers.set(uuid, { helper, mapping, positions });
   }
 
-  // Update bone wireframe helpers (called in animate loop)
+  
   private updateBoneWireframeHelpers() {
     const tempVec = new THREE.Vector3();
 
@@ -1206,7 +1347,7 @@ class ThreeViewer {
           c = triIdx * 3 + 2;
         }
 
-        // Edge 1: a -> b
+        
         skinnedMesh.getVertexPosition(a, tempVec);
         tempVec.applyMatrix4(skinnedMesh.matrixWorld);
         positions[posIdx++] = tempVec.x;
@@ -1219,7 +1360,7 @@ class ThreeViewer {
         positions[posIdx++] = tempVec.y;
         positions[posIdx++] = tempVec.z;
 
-        // Edge 2: b -> c
+        
         skinnedMesh.getVertexPosition(b, tempVec);
         tempVec.applyMatrix4(skinnedMesh.matrixWorld);
         positions[posIdx++] = tempVec.x;
@@ -1232,7 +1373,7 @@ class ThreeViewer {
         positions[posIdx++] = tempVec.y;
         positions[posIdx++] = tempVec.z;
 
-        // Edge 3: c -> a
+        
         skinnedMesh.getVertexPosition(c, tempVec);
         tempVec.applyMatrix4(skinnedMesh.matrixWorld);
         positions[posIdx++] = tempVec.x;
@@ -1246,29 +1387,28 @@ class ThreeViewer {
         positions[posIdx++] = tempVec.z;
       }
 
-      // Mark buffer as needing update
+      
       const positionAttr = helper.geometry.getAttribute('position') as THREE.BufferAttribute;
       positionAttr.needsUpdate = true;
     });
   }
 
-  // Helper: Compute bounding box using actual skinned vertex positions (not bind pose)
-  // This is necessary for animated models where limbs extend beyond the bind pose bbox
+  
   private computeSkinnedBoundingBox(object: THREE.Object3D): THREE.Box3 {
     const box = new THREE.Box3();
     const positionVec = new THREE.Vector3();
 
-    // First pass: update all skeletons so getVertexPosition uses current pose
+    
     object.traverse((child) => {
       if (child instanceof THREE.SkinnedMesh && child.skeleton) {
         child.skeleton.update();
       }
     });
 
-    // Second pass: compute bounding box from vertex positions
+    
     object.traverse((child) => {
       if (child instanceof THREE.SkinnedMesh) {
-        // For skinned meshes, iterate through all vertices and get their current positions
+        
         const geometry = child.geometry;
         const positionAttr = geometry.getAttribute('position');
         if (!positionAttr) return;
@@ -1280,13 +1420,13 @@ class ThreeViewer {
           box.expandByPoint(positionVec);
         }
       } else if (child instanceof THREE.Mesh) {
-        // Regular mesh - use standard bounding box
+        
         const meshBox = new THREE.Box3().setFromObject(child);
         box.union(meshBox);
       }
     });
 
-    // Fallback to standard bbox if no meshes found
+    
     if (box.isEmpty()) {
       box.setFromObject(object);
     }
@@ -1294,7 +1434,7 @@ class ThreeViewer {
     return box;
   }
 
-  // Helper: Find SkinnedMesh that contains the given bone
+  
   private findSkinnedMeshForBone(scene: THREE.Object3D, bone: THREE.Bone): THREE.SkinnedMesh | null {
     let result: THREE.SkinnedMesh | null = null;
     scene.traverse((obj) => {
@@ -1308,7 +1448,7 @@ class ThreeViewer {
     return result;
   }
 
-  // Helper: Collect all descendant bone indices (including the bone itself)
+  
   private collectBoneIndices(bone: THREE.Bone, skeleton: THREE.Skeleton): Set<number> {
     const indices = new Set<number>();
     const boneIndex = skeleton.bones.indexOf(bone);
@@ -1326,7 +1466,7 @@ class ThreeViewer {
     return indices;
   }
 
-  // Helper: Find vertices influenced by the given bone indices (returns array)
+  
   private findInfluencedVertices(
     skinnedMesh: THREE.SkinnedMesh,
     boneIndices: Set<number>,
@@ -1356,7 +1496,7 @@ class ThreeViewer {
     return vertexIndices;
   }
 
-  // Helper: Find vertices influenced by the given bone indices (returns Set)
+  
   private findInfluencedVerticesSet(
     skinnedMesh: THREE.SkinnedMesh,
     boneIndices: Set<number>,
@@ -1386,7 +1526,7 @@ class ThreeViewer {
     return vertexIndices;
   }
 
-  // Helper: Find triangles where at least one vertex is influenced by the bone
+  
   private findInfluencedTriangles(
     geometry: THREE.BufferGeometry,
     vertexIndices: Set<number>
@@ -1418,7 +1558,7 @@ class ThreeViewer {
     return triangleIndices;
   }
 
-  // Clear all helpers (called when content changes)
+  
   private clearHelpers() {
     this.boundingBoxHelpers.forEach((helper) => {
       this.scene.remove(helper);
@@ -1442,16 +1582,16 @@ class ThreeViewer {
     this.boneWireframeHelpers.clear();
   }
 
-  // Platform loading (game-preview mode) - loads GLB from backend
+  
   async loadPlatform(url: string): Promise<{ scene: THREE.Group; sceneGraph: SceneNode }> {
     const { scene, animations } = await this.loadModel(url);
 
-    // Clear previous platform
+    
     if (this.platformScene) {
       this.platformGroup?.remove(this.platformScene);
     }
 
-    // Clear previous platform mixer
+    
     if (this.platformMixer) {
       this.platformMixer.stopAllAction();
       this.platformMixer = null;
@@ -1461,25 +1601,25 @@ class ThreeViewer {
     this.platformScene = scene;
     this.platformGroup?.add(scene);
 
-    // Setup platform animations (separate mixer from main model)
+    
     if (animations.length > 0) {
       this.platformMixer = new THREE.AnimationMixer(scene);
 
-      // Play all animations by default (platform usually has a single looping animation)
+      
       animations.forEach((clip) => {
         const action = this.platformMixer!.clipAction(clip);
         this.platformActions.set(clip.name, action);
         action.play();
       });
 
-      // Tick the mixer to apply initial pose
+      
       this.platformMixer.update(0);
       scene.updateMatrixWorld(true);
 
       console.log(`[Platform] loaded ${animations.length} animation(s):`, animations.map(a => a.name).join(', '));
     }
 
-    // Build scene graph for hierarchy panel
+    
     const sceneGraph = this.buildSceneGraph(scene);
 
     return { scene, sceneGraph };
@@ -1494,22 +1634,20 @@ class ThreeViewer {
   layoutGamePreview(unitScale: number | null) {
     if (!this.platformGroup || !this.platformScene || !this.content) return;
 
-    // 1. Reset model scale to 1 first (so this method can be called multiple times)
-    // Then apply unit scale (like the original game does)
-    // The game preserves the sign of each scale component and multiplies by the config scale
+    
     const scale = unitScale != null && unitScale > 0 ? unitScale : 1;
     this.content.scale.set(scale, scale, scale);
     this.content.updateWorldMatrix(true, true);
     console.log(`[Layout] applied unitScale=${scale} to model="${this.content.name}"`);
 
-    // 2. Reset platform transforms WITHOUT rotation first (for consistent measurement)
+    
     const PLATFORM_SCALE = 1.15;
     this.platformGroup.position.set(0, 0, 0);
     this.platformGroup.scale.set(PLATFORM_SCALE, PLATFORM_SCALE, PLATFORM_SCALE);
     this.platformGroup.rotation.set(0, 0, 0);
     this.platformGroup.updateWorldMatrix(true, true);
 
-    // 3. Measure platform BEFORE rotation for consistency with setContent()
+    
     const platformBox = this.computeSkinnedBoundingBox(this.platformGroup);
     this.platformSize = platformBox.getSize(new THREE.Vector3());
 
@@ -1517,7 +1655,7 @@ class ThreeViewer {
 
     this.platformGroup.updateWorldMatrix(true, true);
 
-    // 4. Get rotated platform bounds for positioning
+    
     const rotatedPlatformBox = this.computeSkinnedBoundingBox(this.platformGroup);
 
     if (!this.platformInitialCenter) {
@@ -1525,7 +1663,7 @@ class ThreeViewer {
     }
     const platformCenter = this.platformInitialCenter;
 
-    // 5. Raycast from above to find platform surface Y
+    
     const raycaster = new THREE.Raycaster();
     raycaster.set(
       new THREE.Vector3(platformCenter.x, rotatedPlatformBox.max.y + 1, platformCenter.z),
@@ -1534,9 +1672,7 @@ class ThreeViewer {
     const intersects = raycaster.intersectObject(this.platformGroup, true);
     const platformSurfaceY = intersects.length > 0 ? intersects[0].point.y : rotatedPlatformBox.max.y;
 
-    // 6. Position platform so disk center is at origin and surface is at Y=0
-    // These offsets correct for the model's disk center not being at its bounding box center.
-    // TODO: if the platform model changes and the disk drifts, update these two values.
+    
     const DISK_CENTER_OFFSET_X = -0.1;
     const DISK_CENTER_OFFSET_Z = 0.3;
     const offsetY = 0 - platformSurfaceY;
@@ -1554,14 +1690,14 @@ class ThreeViewer {
     console.log(`[Layout] model="${this.content.name}" platformSurfaceY=${platformSurfaceY.toFixed(4)} cameraSize=${this.platformSize.length().toFixed(4)}`);
   }
 
-  // Game preview environment loading
+  
   async loadGameEnvironment(url: string): Promise<void> {
     const loader = new THREE.TextureLoader();
     const texture = await loader.loadAsync(url);
     texture.mapping = THREE.EquirectangularReflectionMapping;
     texture.colorSpace = THREE.SRGBColorSpace;
 
-    // Convert equirectangular to PMREM cubemap for IBL
+    
     this.gameEnvironment = this.pmremGenerator.fromEquirectangular(texture).texture;
     texture.dispose();
   }
@@ -1570,7 +1706,7 @@ class ThreeViewer {
     const loader = new THREE.TextureLoader();
     this.gameBackground = await loader.loadAsync(url);
     this.gameBackground.colorSpace = THREE.SRGBColorSpace;
-    this.gameBackground.offset.y = -0.2; // Adjust to match ingame gradient position
+    this.gameBackground.offset.y = -0.2; 
   }
 
   resetCamera() {
@@ -1592,7 +1728,7 @@ class ThreeViewer {
     this.setCameraPreset('isometric');
     this.controls.saveState();
 
-    // Update grid size after camera setup
+    
     this.updateGridSize();
   }
 
@@ -1624,13 +1760,13 @@ class ThreeViewer {
     this.controls.update();
     this.setCameraPreset('isometric');
 
-    // Zoom in 8 scroll steps (OrbitControls dolly factor: 0.95 per step)
+    
     const zoomFactor = Math.pow(0.95, 8);
     const dir = this.camera.position.clone().sub(this.controls.target);
     this.camera.position.copy(this.controls.target.clone().add(dir.multiplyScalar(zoomFactor)));
     this.controls.update();
 
-    // Rotate camera 30 degrees around Y axis for default orientation
+    
     const rotDir = this.camera.position.clone().sub(this.controls.target);
     rotDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (-15 * Math.PI) / 180);
     this.camera.position.copy(this.controls.target.clone().add(rotDir));
@@ -1642,7 +1778,7 @@ class ThreeViewer {
 
     this.controls.saveState();
 
-    // Update grid size after camera setup
+    
     this.updateGridSize();
   }
 
@@ -1672,7 +1808,7 @@ class ThreeViewer {
         position = new THREE.Vector3(0, -distance, 0);
         break;
       case 'isometric':
-        // Front-left view matching ingame unit panel angle (~-20° elevation)
+        
         position = new THREE.Vector3(-distance / 2.0, -distance / 16.0, distance / 2.0)
           .normalize()
           .multiplyScalar(distance);
@@ -1701,7 +1837,7 @@ class ThreeViewer {
     const ctx = offscreen.getContext('2d');
     if (!ctx) return glCanvas.toDataURL('image/png');
 
-    // Draw background with CSS cover semantics
+    
     const img = this.skyBackgroundImage;
     const imgAspect = img.naturalWidth / img.naturalHeight;
     const canvasAspect = width / height;
@@ -1717,7 +1853,7 @@ class ThreeViewer {
     const drawY = this.skyBackgroundPosition.includes('top') ? 0 : (height - drawH) / 2;
     ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
-    // Composite WebGL canvas on top
+    
     ctx.drawImage(glCanvas, 0, 0);
 
     return offscreen.toDataURL('image/png');
@@ -1734,24 +1870,24 @@ class ThreeViewer {
   dispose() {
     this.disposed = true;
 
-    // Stop animation loop
+    
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
     }
 
-    // Remove resize observer
+    
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
 
-    // Clear content
+    
     this.clear();
 
-    // Dispose lights
+    
     this.lights.forEach((light) => {
       light.parent?.remove(light);
     });
 
-    // Dispose helpers
+    
     if (this.gridHelper) {
       this.scene.remove(this.gridHelper);
       this.gridHelper.geometry.dispose();
@@ -1759,7 +1895,7 @@ class ThreeViewer {
     }
     if (this.axesHelper) {
       this.scene.remove(this.axesHelper);
-      // Dispose Line2 children (thick axes)
+      
       this.axesHelper.traverse((child) => {
         if (child instanceof Line2) {
           child.geometry.dispose();
@@ -1773,26 +1909,26 @@ class ThreeViewer {
       (this.skeletonHelper.material as THREE.Material).dispose();
     }
 
-    // Dispose stats
+    
     if (this.stats && this.stats.dom.parentElement) {
       this.stats.dom.parentElement.removeChild(this.stats.dom);
     }
 
-    // Dispose environment textures
+    
     this.neutralEnvironment?.dispose();
     this.gameEnvironment?.dispose();
     this.gameBackground?.dispose();
 
-    // Dispose PMREM
+    
     this.pmremGenerator.dispose();
 
-    // Dispose controls
+    
     this.controls.dispose();
 
-    // Dispose renderer
+    
     this.renderer.dispose();
 
-    // Remove canvas
+    
     if (this.renderer.domElement.parentElement) {
       this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);
     }
@@ -1800,7 +1936,7 @@ class ThreeViewer {
 }
 
 const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
-  function ModelViewer({ glbUrl, onModelLoaded, statsContainer, unitScale, faction }, ref) {
+  function ModelViewer({ glbUrl, onModelLoaded, statsContainer, unitScale, faction, customTextureUrl }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewerRef = useRef<ThreeViewer | null>(null);
     const [viewerReady, setViewerReady] = useState(false);
@@ -1810,7 +1946,7 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
     const modelUrlRef = useRef<string | null>(null);
     const { label } = useLabels();
 
-    // Store selectors
+    
     const {
       displayMode,
       showPlatform,
@@ -1849,14 +1985,14 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
       setGlobalWireframe,
     } = useViewerStore();
 
-    // Expose imperative methods
+    
     useImperativeHandle(ref, () => ({
       takeScreenshot: () => viewerRef.current?.takeScreenshot() ?? null,
       resetCamera: () => viewerRef.current?.resetCamera(),
       setCameraPreset: (preset: CameraPreset) => viewerRef.current?.setCameraPreset(preset),
     }), []);
 
-    // Initialize viewer
+    
     useEffect(() => {
       if (!containerRef.current) return;
 
@@ -1871,7 +2007,7 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
       };
     }, [statsContainer]);
 
-    // Load model when URL changes
+    
     useEffect(() => {
       if (!viewerReady) return;
       const viewer = viewerRef.current;
@@ -1885,7 +2021,7 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
           setLoading(true);
           setError(null);
 
-          // Fetch model as blob
+          
           const response = await fetch(glbUrl);
           if (!response.ok) {
             throw new Error(`Failed to load model: ${response.statusText}`);
@@ -1901,13 +2037,12 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
 
           modelUrlRef.current = blobUrl;
 
-          // Load the model
+          
           const { scene, animations } = await viewer.loadModel(blobUrl);
 
           if (canceled) return;
 
-          // Set content and get materials/scene graph
-          // Skip camera setup in game-preview mode (camera is based on platform, not model)
+          
           const skipCameraSetup = displayMode === 'game-preview';
           const { materials: extractedMaterials, sceneGraph } = viewer.setContent(
             scene,
@@ -1941,8 +2076,26 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
         }
       };
     }, [viewerReady, glbUrl, displayMode, onModelLoaded, setAnimations, setMaterials, setSceneGraph]);
+  
+  useEffect(() => {
+    const viewer = viewerRef.current;
 
-    // Reset layoutReady when displayMode changes
+    if (!viewer || loading) return;
+
+    let canceled = false;
+
+    viewer.setCustomTextureUrl(customTextureUrl ?? null).catch((err) => {
+      if (!canceled) {
+        console.warn('Failed to apply custom texture:', err);
+      }
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [customTextureUrl, loading]);
+
+    
     useEffect(() => {
       if (displayMode === 'game-preview') {
         setLayoutReady(false);
@@ -1951,21 +2104,21 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
       }
     }, [displayMode]);
 
-    // Sync animations with store
+    
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer || loading) return;
       viewer.syncAnimations(storeAnimations, loopMode);
-      // Also sync platform animations (loop mode only, they're always playing)
+      
       viewer.syncPlatformAnimations(loopMode);
     }, [storeAnimations, loopMode, loading]);
 
-    // Playback speed
+    
     useEffect(() => {
       viewerRef.current?.setPlaybackSpeed(playbackSpeed);
     }, [playbackSpeed]);
 
-    // Background and environment
+    
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer) return;
@@ -1973,24 +2126,24 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
       viewer.setEnvironment(displayMode);
     }, [showBackground, backgroundColor, displayMode]);
 
-    // Orbit mode: turntable for Game Preview, free for Studio
+    
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer || !viewerReady) return;
       viewer.setOrbitMode(displayMode === 'game-preview' ? 'turntable' : 'free');
     }, [viewerReady, displayMode]);
 
-    // Tone mapping
+    
     useEffect(() => {
       viewerRef.current?.setToneMapping(toneMapping, exposure);
     }, [toneMapping, exposure]);
 
-    // Pixel ratio
+    
     useEffect(() => {
       viewerRef.current?.setPixelRatioLimit(pixelRatioLimit);
     }, [pixelRatioLimit]);
 
-    // Lights
+    
     useEffect(() => {
       if (!viewerReady) return;
       viewerRef.current?.updateLights(
@@ -2002,62 +2155,61 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
       );
     }, [viewerReady, usePunctualLights, ambientIntensity, ambientColor, directionalIntensity, directionalColor]);
 
-    // Grid + Axes (combined like donmccurdy viewer)
+    
     useEffect(() => {
       viewerRef.current?.setGrid(showGrid);
     }, [showGrid]);
 
-    // Skeleton
+    
     useEffect(() => {
       viewerRef.current?.setSkeleton(showSkeleton);
     }, [showSkeleton]);
 
-    // Stats
+    
     useEffect(() => {
       viewerRef.current?.setStats(showStats);
     }, [showStats]);
 
-    // Auto rotate
+    
     useEffect(() => {
       viewerRef.current?.setAutoRotate(autoRotate, autoRotateSpeed);
     }, [autoRotate, autoRotateSpeed]);
 
-    // Clip planes
+    
     useEffect(() => {
       viewerRef.current?.setClipPlanes(nearClip, farClip);
     }, [nearClip, farClip]);
 
-    // Materials
+    
     useEffect(() => {
       viewerRef.current?.updateMaterials(materials, globalWireframe, pointSize);
     }, [materials, globalWireframe, pointSize]);
 
-    // Visibility
+    
     useEffect(() => {
       viewerRef.current?.updateVisibility(hiddenNodes, soloNode);
     }, [hiddenNodes, soloNode]);
 
-    // Phase 2: Bounding box helpers
+    
     useEffect(() => {
       viewerRef.current?.syncBoundingBoxHelpers(boundingBoxNodes);
     }, [boundingBoxNodes]);
 
-    // Phase 2: Bone wireframe helpers
+    
     useEffect(() => {
       viewerRef.current?.syncWireframeHelpers(wireframeNodes);
     }, [wireframeNodes]);
 
-    // Platform visibility
+    
     useEffect(() => {
       viewerRef.current?.setPlatformVisible(displayMode === 'game-preview' && showPlatform);
     }, [displayMode, showPlatform]);
 
-    // Load platform for game-preview mode
-    // Depends on viewerReady to ensure we reload platform when viewer is recreated (e.g., model switch with key change)
+    
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer || !viewerReady || displayMode !== 'game-preview') {
-        // Clear platform scene graph when not in game-preview mode or viewer not ready
+        
         if (displayMode !== 'game-preview') {
           setPlatformSceneGraph(null);
         }
@@ -2083,7 +2235,7 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
           const { sceneGraph } = await viewer.loadPlatform(platformBlobUrl);
           if (!canceled) {
             setPlatformSceneGraph(sceneGraph);
-            // Apply current animation settings to platform
+            
             viewer.syncPlatformAnimations(loopMode);
             viewer.setPlaybackSpeed(playbackSpeed);
           }
@@ -2101,14 +2253,14 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
           URL.revokeObjectURL(platformBlobUrl);
         }
       };
-      // loopMode and playbackSpeed are intentionally excluded - they're synced by separate effects
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      
+      
     }, [viewerReady, displayMode, setPlatformSceneGraph]);
 
-    // Position platform under model (only after BOTH model AND platform are fully loaded)
+    
     useEffect(() => {
       const viewer = viewerRef.current;
-      // Only run when: viewer ready, game-preview mode, platform visible, model loaded
+      
       if (!viewer || displayMode !== 'game-preview' || !showPlatform || loading) return;
 
       let rafId: number;
@@ -2116,10 +2268,10 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
       let platformReadyFrames = 0;
 
       const tryLayout = () => {
-        // Check if platform is ready (viewer internal state)
+        
         const platformReady = viewer.getPlatformScene();
         if (!platformReady) {
-          // Platform not loaded yet - keep polling indefinitely
+          
           waitingFrames++;
           if (waitingFrames === 1) {
             console.log('[Layout] Waiting for platform to load...');
@@ -2128,14 +2280,14 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
           return;
         }
 
-        // Platform is ready, wait a few more frames for bounding boxes to be calculated
+        
         platformReadyFrames++;
         if (platformReadyFrames < 3) {
           rafId = requestAnimationFrame(tryLayout);
           return;
         }
 
-        // Everything ready, run layout
+        
         viewer.layoutGamePreview(unitScale ?? null);
         setLayoutReady(true);
       };
@@ -2147,7 +2299,7 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
       };
     }, [displayMode, showPlatform, loading, unitScale]);
 
-    // Load game-preview environment (Cold Sunset equirect for IBL)
+    
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer || displayMode !== 'game-preview') return;
@@ -2181,7 +2333,7 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
       };
     }, [displayMode]);
 
-    // Load faction-specific background as CSS background (unit_background primary, sky fallback)
+    
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer) return;
@@ -2225,7 +2377,7 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
       };
     }, [displayMode, faction]);
 
-    // Keyboard shortcuts
+    
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -2255,7 +2407,7 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
         className="w-full h-full bg-[#191919]"
         style={{ position: 'relative' }}
       >
-        {/* Loading overlay */}
+        {}
         {(loading || (displayMode === 'game-preview' && !layoutReady)) && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#191919] text-gray-500 z-10">
             <div className="text-center">
@@ -2265,7 +2417,7 @@ const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
           </div>
         )}
 
-        {/* Error overlay */}
+        {}
         {error && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#191919] gap-3 z-10">
             <p className="text-red-500 text-base">{label('viewer_model_failed')}</p>

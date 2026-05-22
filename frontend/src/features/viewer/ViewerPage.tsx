@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, type ChangeEvent } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useUnitModels, useMapObjectModels, useArtifactModels } from './useModels';
 import { modelsApi } from '@/api/client';
@@ -147,10 +147,60 @@ export default function ViewerPage() {
 
   const { droppedFile, handleFileDropped: onFileDropped, clearDroppedFile } = useDroppedFile();
 
+  const textureInputRef = useRef<HTMLInputElement | null>(null);
+  const [customTexture, setCustomTexture] = useState<{ file: File; blobUrl: string } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (customTexture) {
+        URL.revokeObjectURL(customTexture.blobUrl);
+      }
+    };
+  }, [customTexture]);
+
+  const handleCustomTextureChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      input.value = '';
+      return;
+    }
+
+    setCustomTexture((previous) => {
+      if (previous) {
+        URL.revokeObjectURL(previous.blobUrl);
+      }
+
+      return {
+        file,
+        blobUrl: URL.createObjectURL(file),
+      };
+    });
+
+    input.value = '';
+  }, []);
+
+  const clearCustomTexture = useCallback(() => {
+    setCustomTexture((previous) => {
+      if (previous) {
+        URL.revokeObjectURL(previous.blobUrl);
+      }
+
+      return null;
+    });
+
+    if (textureInputRef.current) {
+      textureInputRef.current.value = '';
+    }
+  }, []);
   const handleFileDropped = useCallback((file: File, blobUrl: string) => {
+    clearCustomTexture();
     onFileDropped(file, blobUrl);
     navigate(`/viewer/${modelType}`);
-  }, [onFileDropped, navigate, modelType]);
+  }, [onFileDropped, navigate, modelType, clearCustomTexture]);
 
   const unitsQuery = useUnitModels(
     modelType === 'units' ? searchQuery || undefined : undefined
@@ -297,12 +347,13 @@ export default function ViewerPage() {
 
   const handleModelTypeChange = useCallback((type: ModelType) => {
     setSearchQuery('');
+    clearCustomTexture();
     navigate(`/viewer/${type}`);
-  }, [navigate]);
+  }, [navigate, clearCustomTexture]);
 
   const handleSelectModel = useCallback((model: ViewerItem) => {
     clearDroppedFile();
-
+    clearCustomTexture();
     if (isUnitListItem(model)) {
       navigate(`/viewer/units/${model.id}`);
     } else if (isArtifactListItem(model)) {
@@ -310,7 +361,7 @@ export default function ViewerPage() {
     } else if (isMapObjectListItem(model)) {
       navigate(`/viewer/map-objects/${model.prefabPath || model.id}`);
     }
-  }, [navigate, clearDroppedFile]);
+  }, [navigate, clearDroppedFile, clearCustomTexture]);
 
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
@@ -589,7 +640,14 @@ export default function ViewerPage() {
               <ErrorBoundary>
                 {glbUrl ? (
                   /* eslint-disable-next-line react-hooks/refs -- Ref access for Three.js stats container */
-                  <ModelViewer ref={modelViewerRef} glbUrl={glbUrl} statsContainer={viewerContainerRef.current} unitScale={selectedModel ? getScale(selectedModel) : null} faction={selectedModel && isUnitListItem(selectedModel) ? selectedModel.faction : null} />
+                  <ModelViewer
+                    ref={modelViewerRef}
+                    glbUrl={glbUrl}
+                    statsContainer={viewerContainerRef.current}
+                    unitScale={selectedModel ? getScale(selectedModel) : null}
+                    faction={selectedModel && isUnitListItem(selectedModel) ? selectedModel.faction : null}
+                    customTextureUrl={customTexture?.blobUrl ?? null}
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-muted-foreground flex-col gap-3">
                     <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -602,6 +660,42 @@ export default function ViewerPage() {
                   </div>
                 )}
               </ErrorBoundary>
+
+              {glbUrl && (
+                <div className="absolute top-4 left-4 z-10 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-md border border-border bg-card/90 px-2 py-1.5 text-xs shadow-lg backdrop-blur">
+                  <input
+                    ref={textureInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                    className="hidden"
+                    onChange={handleCustomTextureChange}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => textureInputRef.current?.click()}
+                    className="rounded border border-border bg-muted px-2 py-1 text-muted-foreground transition-colors hover:bg-muted/80"
+                  >
+                    Custom texture
+                  </button>
+
+                  {customTexture && (
+                    <>
+                      <span className="max-w-40 truncate text-muted-foreground" title={customTexture.file.name}>
+                        {customTexture.file.name}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={clearCustomTexture}
+                        className="rounded border border-border bg-transparent px-2 py-1 text-muted-foreground transition-colors hover:bg-muted/80"
+                      >
+                        Reset
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
               {glbUrl && (
                 <button
                   onClick={handleScreenshot}
