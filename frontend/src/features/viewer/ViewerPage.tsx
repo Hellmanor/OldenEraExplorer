@@ -1,47 +1,65 @@
-import { useState, useMemo, useCallback, useRef, useEffect, type ChangeEvent } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useUnitModels, useMapObjectModels, useArtifactModels } from './useModels';
-import { modelsApi } from '@/api/client';
-import type { UnitListItemDto, MapObjectListItemDto, ArtifactListItemDto } from '@/api/types';
-import ModelViewer from './ModelViewer';
-import type { ModelViewerHandle, CameraPreset } from './ModelViewer';
-import { useViewerStore } from './viewerStore';
-import { useViewerGui } from './useViewerGui';
-import SearchBox from '@/features/search/SearchBox';
-import ErrorBoundary from '@/components/feedback/ErrorBoundary';
-import ProgressiveIcon from '@/components/display/ProgressiveIcon';
-import SortableColumnHeader, { type SortDirection } from '@/components/display/SortableColumnHeader';
-import { useColumnLabels, useLabels } from '@/hooks/useLabels';
-// DRAG-AND-DROP FEATURE - Comment out the next line to disable
-import DropZoneOverlay, { useDroppedFile } from '@/components/feedback/DropZoneOverlay';
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+  type ChangeEvent,
+} from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import {
+  useUnitModels,
+  useMapObjectModels,
+  useArtifactModels,
+} from "./useModels";
+import { modelsApi } from "@/api/client";
+import type {
+  UnitListItemDto,
+  MapObjectListItemDto,
+  ArtifactListItemDto,
+} from "@/api/types";
+import ModelViewer from "./ModelViewer";
+import type { ModelViewerHandle, CameraPreset, CameraSyncState, TextureSlot } from "./ModelViewer";
+import { useViewerStore } from "./viewerStore";
+import { useViewerGui } from "./useViewerGui";
+import SearchBox from "@/features/search/SearchBox";
+import ErrorBoundary from "@/components/feedback/ErrorBoundary";
+import ProgressiveIcon from "@/components/display/ProgressiveIcon";
+import SortableColumnHeader, {
+  type SortDirection,
+} from "@/components/display/SortableColumnHeader";
+import { useColumnLabels, useLabels } from "@/hooks/useLabels";
+import DropZoneOverlay, {
+  useDroppedFile,
+} from "@/components/feedback/DropZoneOverlay";
 
-type ModelType = 'units' | 'map-objects' | 'artifacts';
+type ModelType = "units" | "map-objects" | "artifacts";
 type ViewerItem = UnitListItemDto | MapObjectListItemDto | ArtifactListItemDto;
 
 function isUnitListItem(item: ViewerItem): item is UnitListItemDto {
-  return 'faction' in item || 'tier' in item;
+  return "faction" in item || "tier" in item;
 }
 
 function isMapObjectListItem(item: ViewerItem): item is MapObjectListItemDto {
-  return 'category' in item && !('tier' in item) && !('rarity' in item);
+  return "category" in item && !("tier" in item) && !("rarity" in item);
 }
 
 function isArtifactListItem(item: ViewerItem): item is ArtifactListItemDto {
-  return 'rarity' in item || 'slot' in item;
+  return "rarity" in item || "slot" in item;
 }
 
 const rarityColorClasses: Record<string, string> = {
-  common: 'text-rarity-common',
-  uncommon: 'text-rarity-uncommon',
-  rare: 'text-rarity-rare',
-  epic: 'text-rarity-epic',
-  legendary: 'text-rarity-legendary',
-  mythic: 'text-rarity-mythic',
+  common: "text-rarity-common",
+  uncommon: "text-rarity-uncommon",
+  rare: "text-rarity-rare",
+  epic: "text-rarity-epic",
+  legendary: "text-rarity-legendary",
+  mythic: "text-rarity-mythic",
 };
 
 function getRarityColorClass(rarity: string | null): string {
-  if (!rarity) return 'text-muted-foreground';
-  return rarityColorClasses[rarity.toLowerCase()] || 'text-muted-foreground';
+  if (!rarity) return "text-muted-foreground";
+  return rarityColorClasses[rarity.toLowerCase()] || "text-muted-foreground";
 }
 
 function getIcon(item: ViewerItem): string | null | undefined {
@@ -57,43 +75,42 @@ function getScale(item: ViewerItem): number | null | undefined {
 }
 
 function getModelNameColorClass(item: ViewerItem, isSelected: boolean): string {
-  if (isSelected) return '';
+  if (isSelected) return "";
   if (isArtifactListItem(item)) {
     return getRarityColorClass(item.rarity);
   }
-  return '';
+  return "";
 }
 
-type UnitSortField = 'name' | 'tier' | 'faction' | 'id';
-type MapObjectSortField = 'name' | 'id';
-type ArtifactSortField = 'name' | 'id';
+type UnitSortField = "name" | "tier" | "faction" | "id";
+type MapObjectSortField = "name" | "id";
+type ArtifactSortField = "name" | "id";
 
 function compareUnits(
   a: ViewerItem,
   b: ViewerItem,
   primaryField: UnitSortField,
-  primaryDirection: SortDirection
+  primaryDirection: SortDirection,
 ): number {
-  const dir = primaryDirection === 'asc' ? 1 : -1;
-
+  const dir = primaryDirection === "asc" ? 1 : -1;
   const getFaction = (item: ViewerItem) =>
-    isUnitListItem(item) ? (item.factionDisplay || '') : '';
+    isUnitListItem(item) ? item.factionDisplay || "" : "";
   const getTier = (item: ViewerItem) =>
     isUnitListItem(item) ? (item.tier ?? 999) : 999;
-
   const compareFaction = () => getFaction(a).localeCompare(getFaction(b));
   const compareTier = () => getTier(a) - getTier(b);
-  const compareId = () => a.id.localeCompare(b.id, undefined, { numeric: true });
-  const compareName = () => (a.name || '').localeCompare(b.name || '');
+  const compareId = () =>
+    a.id.localeCompare(b.id, undefined, { numeric: true });
+  const compareName = () => (a.name || "").localeCompare(b.name || "");
 
   switch (primaryField) {
-    case 'faction':
+    case "faction":
       return compareFaction() * dir || compareTier() || compareId();
-    case 'tier':
+    case "tier":
       return compareTier() * dir || compareFaction() || compareId();
-    case 'name':
+    case "name":
       return compareName() * dir;
-    case 'id':
+    case "id":
       return compareId() * dir;
     default:
       return 0;
@@ -103,12 +120,12 @@ function compareUnits(
 function compareByField(
   a: ViewerItem,
   b: ViewerItem,
-  field: 'name' | 'id',
-  direction: SortDirection
+  field: "name" | "id",
+  direction: SortDirection,
 ): number {
-  const dir = direction === 'asc' ? 1 : -1;
-  if (field === 'name') {
-    return (a.name || '').localeCompare(b.name || '') * dir;
+  const dir = direction === "asc" ? 1 : -1;
+  if (field === "name") {
+    return (a.name || "").localeCompare(b.name || "") * dir;
   }
   return a.id.localeCompare(b.id, undefined, { numeric: true }) * dir;
 }
@@ -116,175 +133,273 @@ function compareByField(
 export default function ViewerPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const params = useParams<{ modelId?: string; '*'?: string }>();
+  const params = useParams<{ modelId?: string; "*": string }>();
   const { label } = useLabels();
-
   const modelViewerRef = useRef<ModelViewerHandle>(null);
+  const comparisonViewerRef = useRef<ModelViewerHandle>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const primaryViewerFrameRef = useRef<HTMLDivElement>(null);
+  const textureInputRef = useRef<HTMLInputElement>(null);
 
   const modelType: ModelType = useMemo(() => {
-    if (location.pathname.includes('/viewer/artifacts')) {
-      return 'artifacts';
+    if (location.pathname.includes("/viewer/artifacts")) {
+      return "artifacts";
     }
-    if (location.pathname.includes('/viewer/map-objects')) {
-      return 'map-objects';
+    if (location.pathname.includes("/viewer/map-objects")) {
+      return "map-objects";
     }
-    return 'units';
+    return "units";
   }, [location.pathname]);
 
   const setDisplayMode = useViewerStore((s) => s.setDisplayMode);
-
   const [isPortrait, setIsPortrait] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [compareMode, setCompareMode] = useState(false);
+  const [cameraSyncState, setCameraSyncState] = useState<CameraSyncState | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [textureSlots, setTextureSlots] = useState<TextureSlot[]>([]);
+  const [showOptionalEmissionSlots, setShowOptionalEmissionSlots] = useState(false);
+  const [activeTextureSlotId, setActiveTextureSlotId] = useState<string | null>(null);
+  const [customTextures, setCustomTextures] = useState<
+    Record<string, { file: File; blobUrl: string }>
+  >({});
+  const customTexturesRef = useRef(customTextures);
   const columnLabels = useColumnLabels();
+  const [unitSortField, setUnitSortField] = useState<UnitSortField>("faction");
+  const [unitSortDirection, setUnitSortDirection] =
+    useState<SortDirection>("asc");
+  const [artifactSortField, setArtifactSortField] =
+    useState<ArtifactSortField>("name");
+  const [artifactSortDirection, setArtifactSortDirection] =
+    useState<SortDirection>("asc");
+  const [mapObjectSortField, setMapObjectSortField] =
+    useState<MapObjectSortField>("name");
+  const [mapObjectSortDirection, setMapObjectSortDirection] =
+    useState<SortDirection>("asc");
 
-  const [unitSortField, setUnitSortField] = useState<UnitSortField>('faction');
-  const [unitSortDirection, setUnitSortDirection] = useState<SortDirection>('asc');
-  const [artifactSortField, setArtifactSortField] = useState<ArtifactSortField>('name');
-  const [artifactSortDirection, setArtifactSortDirection] = useState<SortDirection>('asc');
-  const [mapObjectSortField, setMapObjectSortField] = useState<MapObjectSortField>('name');
-  const [mapObjectSortDirection, setMapObjectSortDirection] = useState<SortDirection>('asc');
+  const {
+    droppedFile,
+    handleFileDropped: onFileDropped,
+    clearDroppedFile,
+  } = useDroppedFile();
 
-  const { droppedFile, handleFileDropped: onFileDropped, clearDroppedFile } = useDroppedFile();
-
-  const textureInputRef = useRef<HTMLInputElement | null>(null);
-  const [customTexture, setCustomTexture] = useState<{ file: File; blobUrl: string } | null>(null);
+  useEffect(() => {
+    customTexturesRef.current = customTextures;
+  }, [customTextures]);
 
   useEffect(() => {
     return () => {
-      if (customTexture) {
-        URL.revokeObjectURL(customTexture.blobUrl);
-      }
+      Object.values(customTexturesRef.current).forEach(({ blobUrl }) => {
+        URL.revokeObjectURL(blobUrl);
+      });
     };
-  }, [customTexture]);
-
-  const handleCustomTextureChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      input.value = '';
-      return;
-    }
-
-    setCustomTexture((previous) => {
-      if (previous) {
-        URL.revokeObjectURL(previous.blobUrl);
-      }
-
-      return {
-        file,
-        blobUrl: URL.createObjectURL(file),
-      };
-    });
-
-    input.value = '';
   }, []);
 
-  const clearCustomTexture = useCallback(() => {
-    setCustomTexture((previous) => {
-      if (previous) {
-        URL.revokeObjectURL(previous.blobUrl);
+  const clearCustomTexture = useCallback((slotId?: string) => {
+    setCustomTextures((current) => {
+      if (slotId) {
+        const texture = current[slotId];
+
+        if (!texture) {
+          return current;
+        }
+
+        URL.revokeObjectURL(texture.blobUrl);
+
+        const next = { ...current };
+        delete next[slotId];
+        return next;
       }
 
-      return null;
+      Object.values(current).forEach(({ blobUrl }) => URL.revokeObjectURL(blobUrl));
+      return {};
     });
 
-    if (textureInputRef.current) {
-      textureInputRef.current.value = '';
+    if (!slotId && textureInputRef.current) {
+      textureInputRef.current.value = "";
     }
   }, []);
-  const handleFileDropped = useCallback((file: File, blobUrl: string) => {
-    clearCustomTexture();
-    onFileDropped(file, blobUrl);
-    navigate(`/viewer/${modelType}`);
-  }, [onFileDropped, navigate, modelType, clearCustomTexture]);
+
+  const handleCameraSyncStateChange = useCallback((state: CameraSyncState) => {
+    setCameraSyncState(state);
+  }, []);
+
+  useEffect(() => {
+    if (!compareMode) {
+      setCameraSyncState(null);
+    }
+  }, [compareMode]);
+
+  const handleOptionalEmissionToggle = useCallback(() => {
+    if (showOptionalEmissionSlots) {
+      setCustomTextures((current) => {
+        const next = { ...current };
+
+        Object.keys(next).forEach((slotId) => {
+          if (slotId.startsWith("optionalEmissive:")) {
+            URL.revokeObjectURL(next[slotId].blobUrl);
+            delete next[slotId];
+          }
+        });
+
+        return next;
+      });
+
+      if (activeTextureSlotId?.startsWith("optionalEmissive:")) {
+        setActiveTextureSlotId(null);
+      }
+    }
+
+    setShowOptionalEmissionSlots((value) => !value);
+  }, [activeTextureSlotId, showOptionalEmissionSlots]);
+
+  const handleTextureSlotSelect = useCallback((slotId: string) => {
+    setActiveTextureSlotId(slotId);
+    textureInputRef.current?.click();
+  }, []);
+
+  const handleCustomTextureChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.currentTarget.files?.[0];
+      const slotId = activeTextureSlotId ?? textureSlots[0]?.id;
+
+      event.currentTarget.value = "";
+
+      if (!file || !slotId) return;
+
+      if (!file.type.startsWith("image/")) {
+        return;
+      }
+
+      const blobUrl = URL.createObjectURL(file);
+      setActiveTextureSlotId(null);
+
+      setCustomTextures((current) => {
+        const existing = current[slotId];
+
+        if (existing) {
+          URL.revokeObjectURL(existing.blobUrl);
+        }
+
+        return {
+          ...current,
+          [slotId]: { file, blobUrl },
+        };
+      });
+    },
+    [activeTextureSlotId, textureSlots],
+  );
+
+  const handleFileDropped = useCallback(
+    (file: File, blobUrl: string) => {
+      clearCustomTexture();
+      onFileDropped(file, blobUrl);
+      navigate(`/viewer/${modelType}`);
+    },
+    [clearCustomTexture, onFileDropped, navigate, modelType],
+  );
 
   const unitsQuery = useUnitModels(
-    modelType === 'units' ? searchQuery || undefined : undefined
+    modelType === "units" ? searchQuery || undefined : undefined,
   );
-
   const mapObjectsQuery = useMapObjectModels(
-    modelType === 'map-objects' ? searchQuery || undefined : undefined
+    modelType === "map-objects" ? searchQuery || undefined : undefined,
   );
-
   const artifactsQuery = useArtifactModels(
-    modelType === 'artifacts' ? searchQuery || undefined : undefined
+    modelType === "artifacts" ? searchQuery || undefined : undefined,
   );
 
-  const currentQuery = modelType === 'units'
-    ? unitsQuery
-    : modelType === 'map-objects'
-      ? mapObjectsQuery
-      : artifactsQuery;
+  const currentQuery =
+    modelType === "units"
+      ? unitsQuery
+      : modelType === "map-objects"
+        ? mapObjectsQuery
+        : artifactsQuery;
 
   const sortedModels = useMemo(() => {
     const data = currentQuery.data;
     if (!data) return [];
-
-    if (modelType === 'units') {
-      return [...data].sort((a, b) => compareUnits(a, b, unitSortField, unitSortDirection));
-    } else if (modelType === 'artifacts') {
-      return [...data].sort((a, b) => compareByField(a, b, artifactSortField, artifactSortDirection));
-    } else {
-      return [...data].sort((a, b) => compareByField(a, b, mapObjectSortField, mapObjectSortDirection));
+    if (modelType === "units") {
+      return [...data].sort((a, b) =>
+        compareUnits(a, b, unitSortField, unitSortDirection),
+      );
     }
-  }, [currentQuery.data, modelType, unitSortField, unitSortDirection, artifactSortField, artifactSortDirection, mapObjectSortField, mapObjectSortDirection]);
-
-  const handleUnitSort = useCallback((field: string) => {
-    const f = field as UnitSortField;
-    if (f === unitSortField) {
-      setUnitSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setUnitSortField(f);
-      setUnitSortDirection('asc');
+    if (modelType === "artifacts") {
+      return [...data].sort((a, b) =>
+        compareByField(a, b, artifactSortField, artifactSortDirection),
+      );
     }
-  }, [unitSortField]);
+    return [...data].sort((a, b) =>
+      compareByField(a, b, mapObjectSortField, mapObjectSortDirection),
+    );
+  }, [
+    currentQuery.data,
+    modelType,
+    unitSortField,
+    unitSortDirection,
+    artifactSortField,
+    artifactSortDirection,
+    mapObjectSortField,
+    mapObjectSortDirection,
+  ]);
 
-  const handleArtifactSort = useCallback((field: string) => {
-    const f = field as ArtifactSortField;
-    if (f === artifactSortField) {
-      setArtifactSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setArtifactSortField(f);
-      setArtifactSortDirection('asc');
-    }
-  }, [artifactSortField]);
+  const handleUnitSort = useCallback(
+    (field: string) => {
+      const f = field as UnitSortField;
+      if (f === unitSortField) {
+        setUnitSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      } else {
+        setUnitSortField(f);
+        setUnitSortDirection("asc");
+      }
+    },
+    [unitSortField],
+  );
 
-  const handleMapObjectSort = useCallback((field: string) => {
-    const f = field as MapObjectSortField;
-    if (f === mapObjectSortField) {
-      setMapObjectSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setMapObjectSortField(f);
-      setMapObjectSortDirection('asc');
-    }
-  }, [mapObjectSortField]);
+  const handleArtifactSort = useCallback(
+    (field: string) => {
+      const f = field as ArtifactSortField;
+      if (f === artifactSortField) {
+        setArtifactSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      } else {
+        setArtifactSortField(f);
+        setArtifactSortDirection("asc");
+      }
+    },
+    [artifactSortField],
+  );
+
+  const handleMapObjectSort = useCallback(
+    (field: string) => {
+      const f = field as MapObjectSortField;
+      if (f === mapObjectSortField) {
+        setMapObjectSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      } else {
+        setMapObjectSortField(f);
+        setMapObjectSortDirection("asc");
+      }
+    },
+    [mapObjectSortField],
+  );
 
   const lastKnownSelectedModelRef = useRef<ViewerItem | null>(null);
 
-  // Helper: Find model by ID or prefabPath (for artifacts/map-objects with full path in URL)
-  const findModel = useCallback((modelId: string): ViewerItem | undefined => {
-    return currentQuery.data?.find((m: ViewerItem) => {
-      // Match by ID first
-      if (m.id === modelId) return true;
+  const findModel = useCallback(
+    (modelId: string): ViewerItem | undefined => {
+      return currentQuery.data?.find((m: ViewerItem) => {
+        if (m.id === modelId) return true;
+        if (isMapObjectListItem(m) || isArtifactListItem(m)) {
+          return m.prefabPath === modelId;
+        }
+        return false;
+      });
+    },
+    [currentQuery.data],
+  );
 
-      // For map objects and artifacts, also try matching by prefabPath
-      if (isMapObjectListItem(m) || isArtifactListItem(m)) {
-        return m.prefabPath === modelId;
-      }
-
-      return false;
-    });
-  }, [currentQuery.data]);
-
-  /* eslint-disable react-hooks/refs -- Ref caching pattern for filtered model persistence */
   const selectedModel: ViewerItem | null = useMemo(() => {
-    const catchAllParam = params['*'];
+    const catchAllParam = params["*"];
 
-    if (modelType === 'units' && params.modelId) {
+    if (modelType === "units" && params.modelId) {
       const found = findModel(params.modelId);
       if (found) {
         lastKnownSelectedModelRef.current = found;
@@ -301,7 +416,12 @@ export default function ViewerPage() {
         tier: null,
         iconPath: null,
       } as UnitListItemDto;
-    } else if ((modelType === 'map-objects' || modelType === 'artifacts') && catchAllParam) {
+    }
+
+    if (
+      (modelType === "map-objects" || modelType === "artifacts") &&
+      catchAllParam
+    ) {
       const modelId = catchAllParam;
       const found = findModel(modelId);
       if (found) {
@@ -311,85 +431,96 @@ export default function ViewerPage() {
       if (lastKnownSelectedModelRef.current?.id === modelId) {
         return lastKnownSelectedModelRef.current;
       }
-      if (modelType === 'map-objects') {
-        const firstSlash = modelId.indexOf('/');
-        const category = firstSlash > 0 ? modelId.substring(0, firstSlash) : null;
-        const name = firstSlash > 0 ? modelId.substring(firstSlash + 1) : modelId;
-
+      if (modelType === "map-objects") {
+        const firstSlash = modelId.indexOf("/");
+        const category =
+          firstSlash > 0 ? modelId.substring(0, firstSlash) : null;
+        const name =
+          firstSlash > 0 ? modelId.substring(firstSlash + 1) : modelId;
         return {
           id: name,
           name: modelId,
-          category: category,
+          category,
           icon: null,
           prefabPath: modelId,
         } as MapObjectListItemDto;
-      } else {
-        return {
-          id: modelId,
-          name: modelId,
-          rarity: null,
-          slot: null,
-          raritySlotText: null,
-          icon: null,
-          prefabPath: `artifact/${modelId}`,
-        } as ArtifactListItemDto;
       }
+      return {
+        id: modelId,
+        name: modelId,
+        rarity: null,
+        slot: null,
+        raritySlotText: null,
+        icon: null,
+        prefabPath: `artifact/${modelId}`,
+      } as ArtifactListItemDto;
     }
+
     return null;
   }, [modelType, params, findModel]);
-  /* eslint-enable react-hooks/refs */
 
   useEffect(() => {
     const isOrphanModel = selectedModel?.isOrphan || false;
-    const defaultMode = modelType === 'units' && !isOrphanModel ? 'game-preview' : 'studio';
+    const defaultMode =
+      modelType === "units" && !isOrphanModel ? "game-preview" : "studio";
     setDisplayMode(defaultMode);
   }, [modelType, setDisplayMode, selectedModel]);
 
-  const handleModelTypeChange = useCallback((type: ModelType) => {
-    setSearchQuery('');
-    clearCustomTexture();
-    navigate(`/viewer/${type}`);
-  }, [navigate, clearCustomTexture]);
+  const handleModelTypeChange = useCallback(
+    (type: ModelType) => {
+      setSearchQuery("");
+      clearCustomTexture();
+      navigate(`/viewer/${type}`);
+    },
+    [clearCustomTexture, navigate],
+  );
 
-  const handleSelectModel = useCallback((model: ViewerItem) => {
-    clearDroppedFile();
-    clearCustomTexture();
-    if (isUnitListItem(model)) {
-      navigate(`/viewer/units/${model.id}`);
-    } else if (isArtifactListItem(model)) {
-      navigate(`/viewer/artifacts/${model.id}`);
-    } else if (isMapObjectListItem(model)) {
-      navigate(`/viewer/map-objects/${model.prefabPath || model.id}`);
-    }
-  }, [navigate, clearDroppedFile, clearCustomTexture]);
+  const handleSelectModel = useCallback(
+    (model: ViewerItem) => {
+      clearDroppedFile();
+      clearCustomTexture();
+      if (isUnitListItem(model)) {
+        navigate(`/viewer/units/${model.id}`);
+      } else if (isArtifactListItem(model)) {
+        navigate(`/viewer/artifacts/${model.id}`);
+      } else if (isMapObjectListItem(model)) {
+        navigate(`/viewer/map-objects/${model.prefabPath || model.id}`);
+      }
+    },
+    [navigate, clearDroppedFile, clearCustomTexture],
+  );
 
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
   }, []);
 
   const handleClearSearch = useCallback(() => {
-    setSearchQuery('');
+    setSearchQuery("");
   }, []);
 
   const handleResetCamera = useCallback(() => {
     modelViewerRef.current?.resetCamera();
+    comparisonViewerRef.current?.resetCamera();
   }, []);
 
   const handleCameraPreset = useCallback((preset: string) => {
-    modelViewerRef.current?.setCameraPreset(preset as CameraPreset);
+    const typedPreset = preset as CameraPreset;
+    modelViewerRef.current?.setCameraPreset(typedPreset);
+    comparisonViewerRef.current?.setCameraPreset(typedPreset);
   }, []);
 
   const handleScreenshot = useCallback(() => {
     const dataUrl = modelViewerRef.current?.takeScreenshot();
     if (dataUrl) {
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = dataUrl;
-
-      const modelName = selectedModel?.name || 'model';
-      const sanitizedName = modelName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const modelName = selectedModel?.name || "model";
+      const sanitizedName = modelName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, 19);
       link.download = `${sanitizedName}_${timestamp}.png`;
-
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -397,7 +528,8 @@ export default function ViewerPage() {
   }, [selectedModel]);
 
   const isOrphan = selectedModel?.isOrphan || false;
-  const isArtifactOrMapObject = modelType === 'artifacts' || modelType === 'map-objects';
+  const isArtifactOrMapObject =
+    modelType === "artifacts" || modelType === "map-objects";
 
   useViewerGui({
     containerRef: viewerContainerRef,
@@ -406,31 +538,332 @@ export default function ViewerPage() {
     isOrphan: isOrphan || isArtifactOrMapObject,
   });
 
-  /* eslint-disable react-hooks/refs -- selectedModel is derived from ref-cached value */
   const glbUrl = useMemo((): string | null => {
     if (droppedFile) {
       return droppedFile.blobUrl;
     }
-
     if (!selectedModel) return null;
-
     if (isUnitListItem(selectedModel)) {
       return modelsApi.getUnitGlbUrl(selectedModel.id);
-    } else {
-      const prefabPath = (isMapObjectListItem(selectedModel) || isArtifactListItem(selectedModel))
+    }
+
+    const prefabPath =
+      isMapObjectListItem(selectedModel) || isArtifactListItem(selectedModel)
         ? selectedModel.prefabPath
         : null;
+    if (!prefabPath) return null;
 
-      if (!prefabPath) return null;
+    const firstSlash = prefabPath.indexOf("/");
+    if (firstSlash < 0) return null;
 
-      const firstSlash = prefabPath.indexOf('/');
-      if (firstSlash < 0) return null;
-      const category = prefabPath.substring(0, firstSlash);
-      const name = prefabPath.substring(firstSlash + 1);
-      return modelsApi.getMapObjectGlbUrl(category, name);
-    }
+    const category = prefabPath.substring(0, firstSlash);
+    const name = prefabPath.substring(firstSlash + 1);
+    return modelsApi.getMapObjectGlbUrl(category, name);
   }, [selectedModel, droppedFile]);
-  /* eslint-enable react-hooks/refs */
+
+  useEffect(() => {
+    setTextureSlots([]);
+    setShowOptionalEmissionSlots(false);
+    setActiveTextureSlotId(null);
+  }, [glbUrl]);
+
+  const viewerProps = {
+    glbUrl: glbUrl ?? "",
+    unitScale: selectedModel ? getScale(selectedModel) : null,
+    faction:
+      selectedModel && isUnitListItem(selectedModel)
+        ? selectedModel.faction
+        : null,
+  };
+
+  const customTextureUrls = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(customTextures).map(([slotId, texture]) => [
+          slotId,
+          texture.blobUrl,
+        ]),
+      ),
+    [customTextures],
+  );
+
+  const hasCustomTextures = Object.keys(customTextures).length > 0;
+
+  const displayTextureSlots = useMemo(() => {
+    if (!showOptionalEmissionSlots) {
+      return textureSlots;
+    }
+
+    const detectedEmissionBaseSlotIds = new Set(
+      textureSlots
+        .filter((slot) => slot.channel === "emissiveMap" && slot.baseSlotId)
+        .map((slot) => slot.baseSlotId),
+    );
+
+    const optionalEmissionSlots = textureSlots
+      .filter(
+        (slot) =>
+          slot.channel === "map" &&
+          !detectedEmissionBaseSlotIds.has(slot.id),
+      )
+      .map((slot) => {
+        const baseName = slot.name.replace(/\s*Diffuse$/i, "").trim();
+
+        return {
+          id: `optionalEmissive:${slot.id}`,
+          name: baseName ? `${baseName} Emission` : "Emission",
+          materialNames: slot.materialNames,
+          channel: "emissiveMap" as const,
+          baseSlotId: slot.id,
+          optional: true,
+        };
+      });
+
+    return [...textureSlots, ...optionalEmissionSlots];
+  }, [showOptionalEmissionSlots, textureSlots]);
+
+  const hasDiffuseTextureSlots = textureSlots.some((slot) => slot.channel === "map");
+
+  const renderComparisonToolbar = () => (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <input
+        ref={textureInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+        className="hidden"
+        onChange={handleCustomTextureChange}
+      />
+
+      {displayTextureSlots.length > 0 ? (
+        displayTextureSlots.map((slot, index) => {
+          const selectedTexture = customTextures[slot.id];
+          const labelText = slot.name || `Texture ${index + 1}`;
+
+          return (
+            <div
+              key={slot.id}
+              className="flex items-center gap-2 rounded-md border border-border bg-background/40 px-2 py-1"
+              title={slot.materialNames.join(", ")}
+            >
+              <button
+                type="button"
+                disabled={!glbUrl}
+                onClick={() => handleTextureSlotSelect(slot.id)}
+                className="px-2 py-1 text-xs bg-muted hover:bg-muted/80 text-muted-foreground rounded border border-border cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {labelText}
+              </button>
+
+              {selectedTexture && (
+                <>
+                  <span className="max-w-36 truncate text-xs text-muted-foreground">
+                    {selectedTexture.file.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => clearCustomTexture(slot.id)}
+                    className="px-2 py-1 text-xs bg-muted hover:bg-muted/80 text-muted-foreground rounded border border-border cursor-pointer transition-colors"
+                  >
+                    Reset
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })
+      ) : (
+        <button
+          type="button"
+          disabled
+          className="px-3 py-1.5 text-sm bg-muted text-muted-foreground rounded-md border border-border opacity-50 cursor-not-allowed"
+        >
+          Detecting texture slots...
+        </button>
+      )}
+
+      {hasDiffuseTextureSlots && (
+        <button
+          type="button"
+          disabled={!glbUrl}
+          onClick={handleOptionalEmissionToggle}
+          className="px-3 py-1.5 text-sm bg-muted hover:bg-muted/80 text-muted-foreground rounded-md border border-border cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {showOptionalEmissionSlots ? "Hide emission slots" : "Show emission slots"}
+        </button>
+      )}
+
+      {hasCustomTextures && (
+        <button
+          type="button"
+          onClick={() => clearCustomTexture()}
+          className="px-3 py-1.5 text-sm bg-muted hover:bg-muted/80 text-muted-foreground rounded-md border border-border cursor-pointer transition-colors"
+        >
+          Reset all
+        </button>
+      )}
+
+      <button
+        type="button"
+        disabled={!glbUrl}
+        onClick={() => setCompareMode((value) => !value)}
+        className="px-3 py-1.5 text-sm bg-muted hover:bg-muted/80 text-muted-foreground rounded-md border border-border cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {compareMode ? "Single view" : "Compare"}
+      </button>
+    </div>
+  );
+
+  const renderEmptyViewer = () => (
+    <div className="w-full h-full flex items-center justify-center text-muted-foreground flex-col gap-3">
+      <svg
+        width="64"
+        height="64"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+        <line x1="12" y1="22.08" x2="12" y2="12" />
+      </svg>
+      <p>{label("viewer_select")}</p>
+      <p className="text-sm opacity-60">{label("dropzone_hint")}</p>
+    </div>
+  );
+
+  const renderViewerContent = () => {
+    if (!glbUrl) {
+      return renderEmptyViewer();
+    }
+
+    return (
+      <div
+        ref={viewerContainerRef}
+        className={`relative w-full h-full min-h-0 ${
+          compareMode ? "grid grid-cols-2 gap-3" : "flex justify-center"
+        }`}
+      >
+        <div
+          ref={primaryViewerFrameRef}
+          className={`relative rounded-lg overflow-hidden bg-card shadow-2xl h-full min-w-0 ${
+            !compareMode && isPortrait ? "aspect-[1250/1760]" : "w-full"
+          }`}
+        >
+          {compareMode && (
+            <div className="absolute top-3 left-3 z-10 px-2 py-1 text-xs rounded-md bg-background/80 border border-border text-muted-foreground">
+              Original
+            </div>
+          )}
+          <ErrorBoundary>
+            <ModelViewer
+              ref={modelViewerRef}
+              {...viewerProps}
+              statsContainer={primaryViewerFrameRef.current}
+              customTextureUrls={compareMode ? undefined : customTextureUrls}
+              onTextureSlotsReady={setTextureSlots}
+              syncStore={true}
+              cameraSyncId="primary"
+              cameraSyncState={compareMode ? cameraSyncState : null}
+              onCameraSyncStateChange={
+                compareMode ? handleCameraSyncStateChange : undefined
+              }
+            />
+          </ErrorBoundary>
+        </div>
+
+        {compareMode && (
+          <div className="relative rounded-lg overflow-hidden bg-card shadow-2xl h-full min-w-0">
+            <div className="absolute top-3 left-3 z-10 px-2 py-1 text-xs rounded-md bg-background/80 border border-border text-muted-foreground">
+              Custom texture
+            </div>
+            <ErrorBoundary>
+              <ModelViewer
+                ref={comparisonViewerRef}
+                {...viewerProps}
+                customTextureUrls={customTextureUrls}
+                syncStore={false}
+                cameraSyncId="secondary"
+                cameraSyncState={cameraSyncState}
+                onCameraSyncStateChange={handleCameraSyncStateChange}
+              />
+            </ErrorBoundary>
+          </div>
+        )}
+
+        {glbUrl && renderViewerButtons()}
+      </div>
+    );
+  };
+
+  const renderViewerButtons = () => (
+    <>
+      <button
+        onClick={handleScreenshot}
+        className="absolute bottom-4 left-4 p-0 m-0 bg-transparent text-muted-foreground border-0 cursor-pointer z-10"
+        title={label("viewer_screenshot")}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M4 8v-2a2 2 0 0 1 2 -2h2" />
+          <path d="M4 16v2a2 2 0 0 0 2 2h2" />
+          <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+          <path d="M16 20h2a2 2 0 0 0 2 -2v-2" />
+          <path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+        </svg>
+      </button>
+      <button
+        onClick={() => setIsPortrait((p) => !p)}
+        className="absolute bottom-4 right-4 p-0 m-0 bg-transparent text-muted-foreground border-0 cursor-pointer z-10"
+      >
+        {isPortrait ? (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 3l18 18M3 21l18-18" className="hidden" />
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+        ) : (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="4 14 10 14 10 20" />
+            <polyline points="20 10 14 10 14 4" />
+            <line x1="10" y1="14" x2="3" y2="21" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+          </svg>
+        )}
+      </button>
+    </>
+  );
 
   return (
     <div className="h-full overflow-hidden">
@@ -438,40 +871,28 @@ export default function ViewerPage() {
         <div className="h-[47px] px-2 border-b border-border flex items-center">
           <div className="flex gap-1 w-full">
             <button
-              onClick={() => handleModelTypeChange('units')}
-              className={`flex-1 px-2 py-1 cursor-pointer text-sm rounded-md transition-colors ${
-                modelType === 'units'
-                  ? 'bg-muted text-foreground font-medium border border-border'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground border border-transparent'
-              }`}
+              onClick={() => handleModelTypeChange("units")}
+              className={`flex-1 px-2 py-1 cursor-pointer text-sm rounded-md transition-colors ${modelType === "units" ? "bg-muted text-foreground font-medium border border-border" : "bg-transparent text-muted-foreground hover:text-foreground border border-transparent"}`}
             >
-              {label('nav_units')}
+              {label("nav_units")}
             </button>
             <button
-              onClick={() => handleModelTypeChange('artifacts')}
-              className={`flex-1 px-2 py-1 cursor-pointer text-sm rounded-md transition-colors ${
-                modelType === 'artifacts'
-                  ? 'bg-muted text-foreground font-medium border border-border'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground border border-transparent'
-              }`}
+              onClick={() => handleModelTypeChange("artifacts")}
+              className={`flex-1 px-2 py-1 cursor-pointer text-sm rounded-md transition-colors ${modelType === "artifacts" ? "bg-muted text-foreground font-medium border border-border" : "bg-transparent text-muted-foreground hover:text-foreground border border-transparent"}`}
             >
-              {label('nav_artifacts')}
+              {label("nav_artifacts")}
             </button>
             <button
-              onClick={() => handleModelTypeChange('map-objects')}
-              className={`flex-1 px-2 py-1 cursor-pointer text-sm rounded-md transition-colors ${
-                modelType === 'map-objects'
-                  ? 'bg-muted text-foreground font-medium border border-border'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground border border-transparent'
-              }`}
+              onClick={() => handleModelTypeChange("map-objects")}
+              className={`flex-1 px-2 py-1 cursor-pointer text-sm rounded-md transition-colors ${modelType === "map-objects" ? "bg-muted text-foreground font-medium border border-border" : "bg-transparent text-muted-foreground hover:text-foreground border border-transparent"}`}
             >
-              {label('nav_map_objects')}
+              {label("nav_map_objects")}
             </button>
           </div>
         </div>
 
         <div className="px-2 h-[47px] border-b border-border flex items-center gap-0.5 relative">
-          {modelType === 'units' && (
+          {modelType === "units" && (
             <>
               <SortableColumnHeader
                 label={columnLabels.name}
@@ -481,7 +902,7 @@ export default function ViewerPage() {
                 onSort={handleUnitSort}
               />
               <SortableColumnHeader
-                label={label('label_unit_tier')}
+                label={label("label_unit_tier")}
                 field="tier"
                 currentField={unitSortField}
                 direction={unitSortDirection}
@@ -503,7 +924,7 @@ export default function ViewerPage() {
               />
             </>
           )}
-          {modelType === 'artifacts' && (
+          {modelType === "artifacts" && (
             <>
               <SortableColumnHeader
                 label={columnLabels.name}
@@ -521,7 +942,7 @@ export default function ViewerPage() {
               />
             </>
           )}
-          {modelType === 'map-objects' && (
+          {modelType === "map-objects" && (
             <>
               <SortableColumnHeader
                 label={columnLabels.name}
@@ -539,12 +960,18 @@ export default function ViewerPage() {
               />
             </>
           )}
-
           <div className="ml-auto flex items-center gap-1">
             <SearchBox
               value={searchQuery}
               onChange={handleSearchChange}
-              placeholder={label('search_placeholder_entity', modelType === 'units' ? 'units' : modelType === 'artifacts' ? 'artefacts' : 'map objects')}
+              placeholder={label(
+                "search_placeholder_entity",
+                modelType === "units"
+                  ? "units"
+                  : modelType === "artifacts"
+                    ? "artefacts"
+                    : "map objects",
+              )}
               collapsible={true}
               onClear={handleClearSearch}
             />
@@ -554,14 +981,14 @@ export default function ViewerPage() {
         <div className="flex-1 overflow-auto p-2">
           {currentQuery.isError ? (
             <div className="p-5 text-center text-destructive">
-              <p>{label('load_failed', label('entity_models'))}</p>
+              <p>{label("load_failed", label("entity_models"))}</p>
               <p className="text-xs text-muted-foreground">
-                {label(currentQuery.error?.message || 'error_unknown')}
+                {label(currentQuery.error?.message || "error_unknown")}
               </p>
             </div>
           ) : currentQuery.isLoading ? (
             <div className="p-5 text-center text-muted-foreground">
-              {label('common_loading', ' ' + label('entity_models'))}
+              {label("common_loading", " " + label("entity_models"))}
             </div>
           ) : (
             <ModelList
@@ -575,56 +1002,96 @@ export default function ViewerPage() {
 
         {currentQuery.data && (
           <div className="px-3 py-2 border-t border-border text-xs text-muted-foreground">
-            <span>{label('total_count', currentQuery.data.length, modelType === 'units' ? label('nav_units') : modelType === 'artifacts' ? label('nav_artifacts') : label('nav_map_objects'))}</span>
+            <span>
+              {label(
+                "total_count",
+                currentQuery.data.length,
+                modelType === "units"
+                  ? label("nav_units")
+                  : modelType === "artifacts"
+                    ? label("nav_artifacts")
+                    : label("nav_map_objects"),
+              )}
+            </span>
           </div>
         )}
       </aside>
 
       <main className="h-full overflow-hidden bg-background flex flex-col ml-105">
         {droppedFile ? (
-          <div className="px-4 py-3 border-b border-border bg-card flex items-center justify-between">
-            <div>
-              <h2 className="m-0 text-lg text-foreground flex items-center gap-2">
-                <span className="text-primary">{label('viewer_dropped')}</span>
+          <div className="px-4 py-3 border-b border-border bg-card flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="m-0 text-lg text-foreground flex items-center gap-2 truncate">
+                <span className="text-primary">{label("viewer_dropped")}</span>
                 {droppedFile.file.name}
               </h2>
               <span className="text-xs text-muted-foreground">
-                {label('viewer_size', (droppedFile.file.size / 1024 / 1024).toFixed(2))}
+                {label(
+                  "viewer_size",
+                  (droppedFile.file.size / 1024 / 1024).toFixed(2),
+                )}
               </span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
+              {renderComparisonToolbar()}
               <div className="group relative flex items-center">
-                <svg className="w-5 h-5 text-amber-500/70 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="w-5 h-5 text-amber-500/70 cursor-help"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <div className="invisible group-hover:visible absolute right-0 top-7 w-72 p-3 bg-card border border-border rounded-lg shadow-xl z-[103] text-xs text-muted-foreground leading-relaxed">
-                  {label('viewer_vfx_disclaimer')}
+                  {label("viewer_vfx_disclaimer")}
                 </div>
               </div>
               <button
-                onClick={clearDroppedFile}
+                onClick={() => {
+                  clearCustomTexture();
+                  clearDroppedFile();
+                }}
                 className="px-3 py-1.5 text-sm bg-muted hover:bg-muted/80 text-muted-foreground rounded-md border-0 cursor-pointer transition-colors"
               >
-                {label('viewer_close')}
+                {label("viewer_close")}
               </button>
             </div>
           </div>
         ) : selectedModel ? (
-          <div className="px-4 py-3 border-b border-border bg-card flex items-start justify-between">
-            <div>
-              <h2 className="m-0 text-lg text-foreground">
+          <div className="px-4 py-3 border-b border-border bg-card flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="m-0 text-lg text-foreground truncate">
                 {selectedModel.name}
               </h2>
               <span className="text-xs text-muted-foreground">
                 {getModelSubtitle(selectedModel, label)}
               </span>
             </div>
-            <div className="group relative flex items-center">
-              <svg className="w-5 h-5 text-amber-500/70 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="invisible group-hover:visible absolute right-0 top-7 w-72 p-3 bg-card border border-border rounded-lg shadow-xl z-[103] text-xs text-muted-foreground leading-relaxed">
-                {label('viewer_vfx_disclaimer')}
+            <div className="flex items-center gap-3 shrink-0">
+              {renderComparisonToolbar()}
+              <div className="group relative flex items-center">
+                <svg
+                  className="w-5 h-5 text-amber-500/70 cursor-help"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <div className="invisible group-hover:visible absolute right-0 top-7 w-72 p-3 bg-card border border-border rounded-lg shadow-xl z-[103] text-xs text-muted-foreground leading-relaxed">
+                  {label("viewer_vfx_disclaimer")}
+                </div>
               </div>
             </div>
           </div>
@@ -632,108 +1099,7 @@ export default function ViewerPage() {
 
         <div className="flex-1 flex p-4 overflow-hidden">
           <DropZoneOverlay onFileDropped={handleFileDropped}>
-            <div className="flex justify-center h-full">
-            <div
-              ref={viewerContainerRef}
-              className={`relative rounded-lg overflow-hidden bg-card shadow-2xl h-full ${isPortrait ? 'aspect-[1250/1760]' : 'flex-1'}`}
-            >
-              <ErrorBoundary>
-                {glbUrl ? (
-                  /* eslint-disable-next-line react-hooks/refs -- Ref access for Three.js stats container */
-                  <ModelViewer
-                    ref={modelViewerRef}
-                    glbUrl={glbUrl}
-                    statsContainer={viewerContainerRef.current}
-                    unitScale={selectedModel ? getScale(selectedModel) : null}
-                    faction={selectedModel && isUnitListItem(selectedModel) ? selectedModel.faction : null}
-                    customTextureUrl={customTexture?.blobUrl ?? null}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground flex-col gap-3">
-                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                      <line x1="12" y1="22.08" x2="12" y2="12" />
-                    </svg>
-                    <p>{label('viewer_select')}</p>
-                    <p className="text-sm opacity-60">{label('dropzone_hint')}</p>
-                  </div>
-                )}
-              </ErrorBoundary>
-
-              {glbUrl && (
-                <div className="absolute top-4 left-4 z-10 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-md border border-border bg-card/90 px-2 py-1.5 text-xs shadow-lg backdrop-blur">
-                  <input
-                    ref={textureInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-                    className="hidden"
-                    onChange={handleCustomTextureChange}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => textureInputRef.current?.click()}
-                    className="rounded border border-border bg-muted px-2 py-1 text-muted-foreground transition-colors hover:bg-muted/80"
-                  >
-                    Custom texture
-                  </button>
-
-                  {customTexture && (
-                    <>
-                      <span className="max-w-40 truncate text-muted-foreground" title={customTexture.file.name}>
-                        {customTexture.file.name}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={clearCustomTexture}
-                        className="rounded border border-border bg-transparent px-2 py-1 text-muted-foreground transition-colors hover:bg-muted/80"
-                      >
-                        Reset
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-              {glbUrl && (
-                <button
-                  onClick={handleScreenshot}
-                  className="absolute bottom-4 left-4 p-0 m-0 bg-transparent text-muted-foreground border-0 cursor-pointer z-10"
-                  title={label('viewer_screenshot')}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 8v-2a2 2 0 0 1 2 -2h2" />
-                    <path d="M4 16v2a2 2 0 0 0 2 2h2" />
-                    <path d="M16 4h2a2 2 0 0 1 2 2v2" />
-                    <path d="M16 20h2a2 2 0 0 0 2 -2v-2" />
-                    <path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
-                  </svg>
-                </button>
-              )}
-              <button
-                onClick={() => setIsPortrait(p => !p)}
-                className="absolute bottom-4 right-4 p-0 m-0 bg-transparent text-muted-foreground border-0 cursor-pointer z-10"
-              >
-                {isPortrait ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 3l18 18M3 21l18-18" className="hidden" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <polyline points="9 21 3 21 3 15" />
-                    <line x1="21" y1="3" x2="14" y2="10" />
-                    <line x1="3" y1="21" x2="10" y2="14" />
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="4 14 10 14 10 20" />
-                    <polyline points="20 10 14 10 14 4" />
-                    <line x1="10" y1="14" x2="3" y2="21" />
-                    <line x1="21" y1="3" x2="14" y2="10" />
-                  </svg>
-                )}
-              </button>
-            </div>
-            </div>
+            {renderViewerContent()}
           </DropZoneOverlay>
         </div>
       </main>
@@ -751,19 +1117,22 @@ function getDisplayId(model: ViewerItem): string {
   return model.id;
 }
 
-function getModelSubtitle(model: ViewerItem, label: (key: string, ...args: (string | number)[]) => string): string {
+function getModelSubtitle(
+  model: ViewerItem,
+  label: (key: string, ...args: (string | number)[]) => string,
+): string {
   const parts: string[] = [];
 
   if (isUnitListItem(model)) {
-    parts.push(model.tier ? label('viewer_tier', model.tier) : label('viewer_tier_na'));
+    parts.push(
+      model.tier ? label("viewer_tier", model.tier) : label("viewer_tier_na"),
+    );
     if (model.factionDisplay) {
       parts.push(model.factionDisplay);
     }
-  }
-  else if (isArtifactListItem(model) && model.raritySlotText) {
+  } else if (isArtifactListItem(model) && model.raritySlotText) {
     parts.push(model.raritySlotText);
-  }
-  else if (isMapObjectListItem(model) && model.category) {
+  } else if (isMapObjectListItem(model) && model.category) {
     parts.push(model.category);
   }
 
@@ -771,7 +1140,7 @@ function getModelSubtitle(model: ViewerItem, label: (key: string, ...args: (stri
     parts.push(getDisplayId(model));
   }
 
-  return parts.join(' · ');
+  return parts.join(" · ");
 }
 
 function ModelList({ models, selectedModelId, onSelectModel }: ModelListProps) {
@@ -780,7 +1149,7 @@ function ModelList({ models, selectedModelId, onSelectModel }: ModelListProps) {
   if (models.length === 0) {
     return (
       <div className="p-5 text-center text-muted-foreground">
-        {label('no_results', label('entity_models'))}
+        {label("no_results", label("entity_models"))}
       </div>
     );
   }
@@ -793,26 +1162,35 @@ function ModelList({ models, selectedModelId, onSelectModel }: ModelListProps) {
           onClick={() => onSelectModel(model)}
           className={`flex items-center gap-3 px-3 py-2.5 border-0 rounded-md cursor-pointer text-left w-full transition-colors ${
             selectedModelId === model.id
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-transparent text-foreground hover:bg-accent'
-          } ${model.isOrphan ? 'opacity-70' : ''}`}
+              ? "bg-primary text-primary-foreground"
+              : "bg-transparent text-foreground hover:bg-accent"
+          } ${model.isOrphan ? "opacity-70" : ""}`}
         >
-          <ProgressiveIcon iconPath={getIcon(model)} alt={model.name} size={40} />
-
+          <ProgressiveIcon
+            iconPath={getIcon(model)}
+            alt={model.name}
+            size={40}
+          />
           <div className="flex-1 min-w-0">
-            <div className={`overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-1.5 ${
-              selectedModelId === model.id ? 'font-medium' : 'font-normal'
-            } ${getModelNameColorClass(model, selectedModelId === model.id)}`}>
+            <div
+              className={`overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-1.5 ${
+                selectedModelId === model.id ? "font-medium" : "font-normal"
+              } ${getModelNameColorClass(model, selectedModelId === model.id)}`}
+            >
               {model.name}
               {model.isOrphan && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-medium uppercase tracking-wide">
-                  {label('viewer_orphan')}
+                  {label("viewer_orphan")}
                 </span>
               )}
             </div>
-            <div className={`text-xs mt-0.5 ${
-              selectedModelId === model.id ? 'text-primary-foreground/70' : 'text-muted-foreground'
-            }`}>
+            <div
+              className={`text-xs mt-0.5 ${
+                selectedModelId === model.id
+                  ? "text-primary-foreground/70"
+                  : "text-muted-foreground"
+              }`}
+            >
               {getModelSubtitle(model, label)}
             </div>
           </div>
